@@ -1,6 +1,6 @@
 {
- "name": "Música",
- "short_name": "Música",
+ "name": "Drums",
+ "short_name": "Drums",
  "start_url": "./",
  "scope": "./",
  "display": "standalone",

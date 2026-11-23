@@ -43,7 +43,6 @@ svg{width:1em;height:1em;fill:currentColor;display:block}
 .meta{flex:1;min-width:0;text-align:center}
 .meta b{display:block;font-weight:500;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .meta span{display:block;font-size:12px;color:var(--tx2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.disp .bar{position:absolute;left:0;bottom:0;height:2px;background:var(--ac);width:0}
 .vol{display:flex;align-items:center;gap:8px;width:130px;color:var(--tx2);font-size:18px}
 input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:4px;border-radius:2px;background:linear-gradient(90deg,var(--tx2) var(--p,0%),var(--ln) var(--p,0%));outline:0}
 input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:12px;height:12px;border-radius:50%;background:var(--tx)}
@@ -342,7 +341,7 @@ function render(){
   const chips=()=>'<div class="chips">'+[['lib','Músicas'],['artists','Artistas'],['albums','Álbuns'],['pls','Playlists'],['queue','Fila']].map(([v,t])=>`<button class="chip${view===v?' on':''}" data-v="${v}">${t}</button>`).join('')+'</div>';
   const card=(x,i)=>`<button class="card" data-i="${i}"><div class="art${hc(x)}" data-ck="${esc(ck(x))}" style="background:${artCss(x)}"><svg width="40" height="40"><use href="#i-note"/></svg></div><b>${esc(x.title)}</b><span>${esc(x.artist)}</span></button>`;
   if(view==='home'){h.textContent='Ouvir agora';
-    const A=hist.map(i=>songs.find(x=>x.id===i)).filter(Boolean).slice(0,12),B=[...songs].sort((p,q)=>(q.d||'').localeCompare(p.d||'')).slice(0,24);shown=[...A,...B];
+    const A=hist.map(i=>songs.find(x=>x.id===i)).filter(Boolean).slice(0,12),B=[...songs].sort((p,q)=>(q.d||'').localeCompare(p.d||'')).slice(0,24);shown=[...A,...B];homeA=A;homeB=B;
     c.innerHTML=songs.length?(A.length?'<h2 style="margin-top:0">Ouvidas recentemente</h2><div class="grid">'+A.map(card).join('')+'</div>':'')+'<h2'+(A.length?'':' style="margin-top:0"')+'>Adicionadas recentemente</h2><div class="grid">'+B.map((x,i)=>card(x,A.length+i)).join('')+'</div>':empty()}
   else if(view==='lib'){h.textContent='Músicas';shown=sorted(songs);
     c.innerHTML=chips()+'<div><span style="color:var(--tx2);font-size:13px">Ordenar:</span><select class="q" id="so"><option value="nome">Nome</option><option value="artista">Artista</option><option value="recentes">Mais recentes</option></select>'+(cfg.key?'<button class="btn alt" id="rf" style="margin:0 0 12px 8px">Atualizar</button>':'')+'</div>'+(songs.length?list(shown):empty());
@@ -394,7 +393,7 @@ function render(){
     <label style="margin-top:22px">Ou adiciona uma música avulsa (ligação do ficheiro)</label>
     <input class="q" id="ml" placeholder="https://drive.google.com/file/d/…" style="margin:0"><input class="q" id="mname" placeholder="Artista - Título" style="margin:0">
     <button class="btn alt" id="ad">Adicionar música</button><div id="msg">${esc(msg)}</div>
-    ${manual.length?'<button class="btn alt" id="cl">Remover músicas avulsas</button>':''}<small style="margin-top:18px">Versão 16 · capas automáticas</small></div>`;
+    ${manual.length?'<button class="btn alt" id="cl">Remover músicas avulsas</button>':''}<small style="margin-top:18px">Versão 17 · capas automáticas</small></div>`;
     $('#cv').onchange=e=>{cfg.covers=e.target.checked;st.set('cfg',cfg);if(cfg.covers)loadCovers()};
     $('#rc').onclick=()=>{let n=0;Object.keys(covers).forEach(k=>{if(!covers[k]){delete covers[k];n++}});covErr.clear();saveCovers();toast(n?'A procurar '+n+' capas em falta…':'A procurar capas…');loadCovers()};
     $('#lo').onchange=e=>{cfg.online=e.target.checked;st.set('cfg',cfg)};
@@ -486,7 +485,14 @@ const artCss=x=>cov(x)?`url('${cov(x)}') center/cover`:bg(x.title);
 function applyMeta(x){const m=meta[x.id];if(!m)return;if(m.t)x.title=m.t;if(m.a)x.artist=m.a;if(m.l)x.album=m.l;if(m.du)x.du=m.du;if(m.k)x.k=m.k}
 let sv1=0,sv2=0;
 const saveMeta=()=>{clearTimeout(sv1);sv1=setTimeout(()=>st.set('meta',meta),1500)},saveCovers=()=>{clearTimeout(sv2);sv2=setTimeout(()=>st.set('covers',covers),1500)};
-function dataToUrl(d){const b=atob(d.split(',')[1]),u=new Uint8Array(b.length);for(let i=0;i<b.length;i++)u[i]=b.charCodeAt(i);return URL.createObjectURL(new Blob([u],{type:'image/jpeg'}))}
+function dataToBlob(d){const b=atob(d.split(',')[1]),u=new Uint8Array(b.length);for(let i=0;i<b.length;i++)u[i]=b.charCodeAt(i);return new Blob([u],{type:'image/jpeg'})}
+// Capas lidas dos ficheiros ficam no IndexedDB (o localStorage só tem ~5 MB); em covers fica apenas a marca 'idb'
+const idb=(()=>{let p=null;
+  const open=()=>p||(p=new Promise((res,rej)=>{const r=indexedDB.open('drums',1);r.onupgradeneeded=()=>r.result.createObjectStore('cov');r.onsuccess=()=>res(r.result);r.onerror=()=>{p=null;rej(r.error)}}));
+  const tx=(m,f)=>open().then(db=>new Promise((res,rej)=>{const t=db.transaction('cov',m),q=f(t.objectStore('cov'));t.oncomplete=()=>res(q&&q.result);t.onerror=t.onabort=()=>rej(t.error)}));
+  return{get:k=>tx('readonly',s=>s.get(k)),set:(k,v)=>tx('readwrite',s=>s.put(v,k)),del:k=>tx('readwrite',s=>s.delete(k))}})();
+function storeCover(key,blob,fallback){covUrl[key]=URL.createObjectURL(blob);
+  idb.set(key,blob).then(()=>{covers[key]='idb';saveCovers()}).catch(()=>{if(fallback){covers[key]=fallback;saveCovers()}})}
 const ss4=(u,o)=>(u[o]&127)<<21|(u[o+1]&127)<<14|(u[o+2]&127)<<7|(u[o+3]&127);
 function dec(b,enc){try{let l=['iso-8859-1','utf-16le','utf-16be','utf-8'][enc]||'utf-8';if(enc===1&&b[0]===254&&b[1]===255)l='utf-16be';return new TextDecoder(l).decode(b).replace(/\0+$/,'').trim()}catch{return''}}
 function id3(u){
@@ -530,7 +536,7 @@ async function tagOne(x){
 async function tagRead(x){
   let r=null;try{r=await readTag(x)}catch(e){delete meta[x.id];bad.add(x.id);return}
   if(r){const m={};if(r.t)m.t=r.t;if(r.a)m.a=r.a;if(r.l)m.l=r.l;if(+r.n>0)m.du=Math.round(+r.n/1000);const k=parseInt(r.k);if(k>0)m.k=k;meta[x.id]=m;applyMeta(x);
-    if(r.img){const key=ck(x);if(!covUrl[key]){try{const dd=await thumb(r.img);covers[key]=dd;covUrl[key]=dataToUrl(dd);saveCovers()}catch(e){}}}}
+    if(r.img){const key=ck(x);if(!covUrl[key]){try{const dd=await thumb(r.img);covers[key]='idb';storeCover(key,dataToBlob(dd),dd);paint(key)}catch(e){}}}}
   saveMeta()}
 let tagRun=false;
 async function loadTags(){
@@ -586,7 +592,7 @@ async function pickCover(x){
   const [a,b]=await Promise.all([itunes({term:(ar+' '+clean(x.title)).trim(),entity:'song',limit:'10'}),x.album?itunes({term:(ar+' '+clean(x.album)).trim(),entity:'album',limit:'5'}):Promise.resolve([])]);
   if(a==null&&!(b&&b.length))return toast('Não foi possível ligar ao iTunes');
   const seen=new Set(),opts=[...(b||[]),...(a||[])].filter(r=>{const u=big(r.artworkUrl100);if(!u||seen.has(u))return false;seen.add(u);return true}).slice(0,10);
-  const set=u=>{const key=ck(x);covers[key]=u;if(u)covUrl[key]=u;else delete covUrl[key];covErr.delete(key);saveCovers();paint(key);toast(u?'Capa atualizada':'Capa removida')};
+  const set=u=>{const key=ck(x);if(covers[key]==='idb')idb.del(key).catch(()=>{});covers[key]=u;if(u)covUrl[key]=u;else delete covUrl[key];covErr.delete(key);saveCovers();paint(key);toast(u?'Capa atualizada':'Capa removida')};
   menu('Capa de «'+x.title+'»',[...opts.map(r=>({t:(r.collectionName||r.trackName||'')+' — '+r.artistName,img:r.artworkUrl100,fn:()=>set(big(r.artworkUrl100))})),
     ...(opts.length?[]:[{t:'Nenhuma capa encontrada'}]),...(cov(x)?[{t:'Remover capa',fn:()=>set('')}]:[])])}
 function parseLrc(t){const out=[];let timed=false;
@@ -632,13 +638,15 @@ function ui(){
   $$('.row').forEach(r=>{const x=shown[r.dataset.i];r.classList.toggle('cur',!!(x&&cur&&x.id===cur.id))});
   if(s)document.title=s.title+' · Drums'}
 
+const mix=a=>{for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]]}return a};
 function play(i,from){
   if(from)shown=from;
   const arr=shown.length?shown:songs;if(!arr.length)return;
-  base=arr.slice();queue=arr.slice();if(shuffle){const c=arr[i];queue=arr.filter((_,k)=>k!==i).sort(()=>Math.random()-.5);queue.unshift(c);qi=0}else qi=i;
+  base=arr.slice();queue=arr.slice();if(shuffle){const c=arr[i];queue=mix(arr.filter((_,k)=>k!==i));queue.unshift(c);qi=0}else qi=i;
   load()}
 function load(){cur=queue[qi];if(view==='lyrics')setTimeout(loadLyrics,0);{const x=cur;tagOne(x).then(()=>coverOne(x)).then(()=>{if(cur===x){ui();media()}}).catch(()=>{})}hist=[cur.id,...hist.filter(i=>i!==cur.id)].slice(0,30);st.set('hist',hist);au.src=url(cur);au.play().catch(()=>{});ui();media()}
-function playRow(i){if(!(i>=0))return;if(view==='queue'){if(qi+1+i<queue.length){qi=qi+1+i;load()}return}play(i)}
+let homeA=[],homeB=[];
+function playRow(i){if(!(i>=0))return;if(view==='home'){i<homeA.length?play(i,homeA):play(i-homeA.length,homeB);return}if(view==='queue'){if(qi+1+i<queue.length){qi=qi+1+i;load()}return}play(i)}
 function nav(d){if(!queue.length)return;let n=qi+d;
   if(n>=queue.length){if(repeat===2)n=0;else return au.pause()}
   if(n<0)n=0;qi=n;load()}
@@ -650,7 +658,7 @@ async function dl(s){if(!s)return toast('Escolhe primeiro uma música');
     const m=(b.type.split('/')[1]||'mpeg'),ext=/mpeg/.test(m)?'mp3':/mp4|m4a|aac/.test(m)?'m4a':/wav/.test(m)?'wav':/flac/.test(m)?'flac':/ogg|opus/.test(m)?'ogg':'mp3';
     const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download=(s.artist==='Google Drive'?'':s.artist+' - ')+s.title+'.'+ext;
     document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),5000);toast('Transferência concluída')}
-  catch{window.open('https://drive.google.com/uc?export=download&id='+s.id,'_blank')}}
+  catch{menu('Não foi possível transferir aqui',[{t:'Abrir no Google Drive',fn:()=>window.open('https://drive.google.com/uc?export=download&id='+encodeURIComponent(s.id),'_blank')},{t:'Cancelar'}])}}
 function media(){if(!('mediaSession'in navigator)||!cur)return;
   navigator.mediaSession.metadata=new MediaMetadata({title:cur.title,artist:cur.artist,album:cur.album||'',artwork:cov(cur)?[{src:cov(cur),sizes:/^https:/.test(cov(cur))?'600x600':'128x128',type:'image/jpeg'}]:[]});
   navigator.mediaSession.setActionHandler('play',()=>au.play());navigator.mediaSession.setActionHandler('pause',()=>au.pause());
@@ -702,13 +710,16 @@ document.addEventListener('keydown',e=>{if((e.key==='ArrowRight'||e.key==='Arrow
   if(e.key==='Enter'&&e.target.classList.contains('row'))playRow(+e.target.dataset.i);
   if(e.code==='Space'&&!/INPUT|TEXTAREA|SELECT|BUTTON/.test(e.target.tagName)){e.preventDefault();toggle()}});
 $$('#shuf,#shuf2').forEach(b=>b.onclick=()=>{shuffle=!shuffle;
-  if(cur&&base.length){if(shuffle){queue=[cur,...base.filter(x=>x.id!==cur.id).sort(()=>Math.random()-.5)];qi=0}else{queue=base.slice();qi=Math.max(0,queue.findIndex(x=>x.id===cur.id))}}
+  if(cur&&base.length){if(shuffle){queue=[cur,...mix(base.filter(x=>x.id!==cur.id))];qi=0}else{queue=base.slice();qi=Math.max(0,queue.findIndex(x=>x.id===cur.id))}}
   toast(shuffle?'Aleatório ativado':'Aleatório desativado');ui()});
 $$('#rep,#rep2').forEach(b=>b.onclick=()=>{repeat=(repeat+1)%3;toast(['Repetir: desativado','Repetir uma música','Repetir tudo'][repeat]);ui()});
 
 addEventListener('offline',()=>toast('Sem internet: a app abre, mas as músicas precisam do Drive'));
 if('serviceWorker'in navigator)addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}));
-Object.keys(covers).forEach(k=>{const v=covers[k];if(!v)return;try{covUrl[k]=/^data:/.test(v)?dataToUrl(v):v}catch(e){}});
+Object.keys(covers).forEach(k=>{const v=covers[k];if(!v)return;
+  if(v==='idb'){idb.get(k).then(b=>{if(covers[k]!=='idb')return;if(b){covUrl[k]=URL.createObjectURL(b);paint(k)}else{delete covers[k];saveCovers()}}).catch(()=>{});return}
+  if(/^data:/.test(v)){try{storeCover(k,dataToBlob(v),v)}catch(e){}return}  // migra capas antigas do localStorage
+  covUrl[k]=v});
 build();render();ui();restore();loadTags();loadCovers();
 if(cfg.key&&cfg.folder)sync(drive.length>0);
 setInterval(()=>{if(document.visibilityState==='visible')sync(true)},60000);
