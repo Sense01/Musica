@@ -297,8 +297,11 @@ const fmt=t=>isFinite(t)?Math.floor(t/60)+':'+String(Math.floor(t%60)).padStart(
 const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const hue=s=>{let h=0;for(const c of s)h=(h*31+c.charCodeAt(0))%360;return h};
 const bg=s=>{const h=hue(s);return`linear-gradient(135deg,hsl(${h} 75% 62%),hsl(${(h+50)%360} 70% 42%))`};
-function parse(f){const n=f.name.replace(/\.[a-z0-9]{2,4}$/i,'').replace(/_/g,' ');const p=n.split(' - ');
-  return{id:f.id,d:f.createdTime||'',fn:n,title:(p.length>1?p.slice(1).join(' - '):n).trim(),artist:(p.length>1?p[0]:'Google Drive').trim()}}
+function parse(f){return parseName(f.id,f.name.replace(/\.[a-z0-9]{2,4}$/i,'').replace(/_/g,' '),f.createdTime)}
+function parseName(id,n,d){let p=n.replace(/^\s*\d{1,4}\s*[.)]\s+/,'').split(' - ');
+  if(p.length>1&&/^\s*\d{1,4}\s*$/.test(p[0]))p=p.slice(1);  // número de faixa/ordem no início
+  const t=p.length>1?p.slice(1).join(' - '):p[0];
+  return{id,d:d||'',fn:n,title:(t||n).trim(),artist:(p.length>1?p[0]:'Google Drive').trim()}}
 const url=s=>cfg.key?`https://www.googleapis.com/drive/v3/files/${s.id}?alt=media&key=${encodeURIComponent(cfg.key)}`:`https://drive.google.com/uc?export=download&id=${s.id}`;
 const fid=s=>{s=s.trim();let m=s.match(/\/d\/([\w-]{15,})/)||s.match(/folders\/([\w-]{15,})/)||s.match(/[?&]id=([\w-]{15,})/);return m?m[1]:s};
 function build(){songs=[...drive,...manual];songs.forEach(applyMeta);songs.sort((a,b)=>a.title.localeCompare(b.title,'pt'))}
@@ -389,12 +392,12 @@ function render(){
     <label style="margin-top:14px;display:flex;gap:8px;align-items:center;color:var(--tx)"><input type="checkbox" id="tg" ${cfg.tags!==false?'checked':''}> Ler capas, álbuns e duração dos ficheiros (usa dados)</label>
     <label style="margin-top:8px;display:flex;gap:8px;align-items:center;color:var(--tx)"><input type="checkbox" id="lo" ${cfg.online!==false?'checked':''}> Procurar letras online (envia artista e título ao lrclib.net)</label>
     <label style="margin-top:8px;display:flex;gap:8px;align-items:center;color:var(--tx)"><input type="checkbox" id="cv" ${cfg.covers!==false?'checked':''}> Procurar capas online quando o ficheiro não tem (envia artista e título ao iTunes da Apple)</label>
-    <button class="btn alt" id="rc" style="justify-self:start">Voltar a procurar capas em falta</button>
+    <button class="btn alt" id="rc" style="justify-self:start">Voltar a procurar capas em falta</button><small id="cvs"></small>
     <label style="margin-top:22px">Ou adiciona uma música avulsa (ligação do ficheiro)</label>
     <input class="q" id="ml" placeholder="https://drive.google.com/file/d/…" style="margin:0"><input class="q" id="mname" placeholder="Artista - Título" style="margin:0">
     <button class="btn alt" id="ad">Adicionar música</button><div id="msg">${esc(msg)}</div>
-    ${manual.length?'<button class="btn alt" id="cl">Remover músicas avulsas</button>':''}<small style="margin-top:18px">Versão 17 · capas automáticas</small></div>`;
-    $('#cv').onchange=e=>{cfg.covers=e.target.checked;st.set('cfg',cfg);if(cfg.covers)loadCovers()};
+    ${manual.length?'<button class="btn alt" id="cl">Remover músicas avulsas</button>':''}<small style="margin-top:18px">Versão 18 · capas automáticas</small></div>`;
+    updCovStat();$('#cv').onchange=e=>{cfg.covers=e.target.checked;st.set('cfg',cfg);if(cfg.covers)loadCovers()};
     $('#rc').onclick=()=>{let n=0;Object.keys(covers).forEach(k=>{if(!covers[k]){delete covers[k];n++}});covErr.clear();saveCovers();toast(n?'A procurar '+n+' capas em falta…':'A procurar capas…');loadCovers()};
     $('#lo').onchange=e=>{cfg.online=e.target.checked;st.set('cfg',cfg)};
     $('#tg').onchange=e=>{cfg.tags=e.target.checked;st.set('cfg',cfg);if(cfg.tags)loadTags()};
@@ -550,8 +553,8 @@ async function loadTags(){
 const tagging=new Set(),covErr=new Set();
 const tagsDone=x=>cfg.tags===false||!cfg.key||manual.some(y=>y.id===x.id)||bad.has(x.id)||(meta[x.id]!==undefined&&!tagging.has(x.id));
 const big=u=>u?u.replace(/\/\d+x\d+(bb)?\.(jpg|png|webp)$/i,'/600x600bb.jpg'):'';
-const clean=s=>String(s||'').replace(/[\(\[][^\)\]]*(official|video|v[ií]deo|audio|[áa]udio|lyric|letra|clip|hd|4k|remaster|visuali[sz]er)[^\)\]]*[\)\]]/gi,'').replace(/\s+/g,' ').trim();
-const mainArtist=x=>x.artist==='Google Drive'?'':x.artist.split(/,|&|\bfeat\.?\b|\bft\.?\b/i)[0].trim();
+const clean=s=>String(s||'').replace(/[\(\[][^\)\]]*[\)\]]/g,' ').replace(/[#@]\S+/g,' ').replace(/\s+-\s+(official|lyric|letra|audio|video|ao vivo|live).*$/i,'').replace(/\s+/g,' ').trim();
+const mainArtist=x=>x.artist==='Google Drive'?'':(x.artist.replace(/[#@]\S+/g,' ').split(/\s*,\s*|\s+&\s+|\s+e\s+|\s+x\s+|\s+(?:feat|ft)\.?\s+/i).map(t=>t.trim()).filter(Boolean)[0]||'');
 function jsonp(u){return new Promise((res,rej)=>{const cb='itcb'+Date.now().toString(36)+Math.random().toString(36).slice(2,7),s=document.createElement('script');let t;
   const done=()=>{clearTimeout(t);delete window[cb];s.remove()};
   window[cb]=d=>{done();res(d)};s.onerror=()=>{done();rej(0)};t=setTimeout(()=>{done();rej(0)},12000);
@@ -563,7 +566,7 @@ async function itunes(p){
 function pickArt(res,x,alb){
   const a=norm(mainArtist(x)),t=norm(clean(alb?x.album:x.title));let best=null,bs=0;
   for(const r of res){if(!r.artworkUrl100)continue;const ra=norm(r.artistName),rt=norm(clean(alb?r.collectionName:r.trackName));
-    let sc=0;if(a&&ra&&(ra.includes(a)||a.includes(ra)))sc+=2;if(t&&rt&&(rt===t||rt.includes(t)||t.includes(rt)))sc+=1;
+    let sc=0;if(a&&ra&&((' '+ra+' ').includes(' '+a+' ')||(' '+a+' ').includes(' '+ra+' ')))sc+=2;if(t&&rt&&(rt===t||rt.includes(t)||t.includes(rt)))sc+=1;
     if(sc>bs){bs=sc;best=r}}
   return best&&bs>=(a?3:1)?big(best.artworkUrl100):null}
 function paint(key){const u=covUrl[key];
@@ -574,17 +577,22 @@ async function coverOne(x){
   if(!x||cfg.covers===false)return 'skip';const key=ck(x);if(covers[key]!==undefined||covErr.has(key))return 'skip';
   const alb=!!x.album,ar=mainArtist(x);
   let res=await itunes({term:(ar+' '+clean(alb?x.album:x.title)).trim(),entity:alb?'album':'song'});
-  if(res==null){covErr.add(key);return 'err'}
+  if(res==null)return 'err';
   if(ck(x)!==key||covers[key]!==undefined)return 'ok';
   let u=pickArt(res,x,alb);
   if(!u&&alb){const r2=await itunes({term:(ar+' '+clean(x.title)).trim(),entity:'song'});if(r2)u=pickArt(r2,x,false)}
   covers[key]=u||'';if(u){covUrl[key]=u;paint(key)}saveCovers();return 'ok'}
-let covRun=false;
+let covRun=false,covFails=0;
+function covOrder(){const seen=new Set(),out=[],byId=new Map(songs.map(y=>[y.id,y])),add=x=>{const y=x&&byId.get(x.id||x);if(y&&!seen.has(y.id)){seen.add(y.id);out.push(y)}};
+  add(cur);queue.slice(qi+1,qi+8).forEach(add);hist.forEach(add);[...songs].sort((p,q)=>(q.d||'').localeCompare(p.d||'')).forEach(add);return out}
+function updCovStat(){const e=$('#cvs');if(e){const v=Object.values(covers);e.textContent=v.filter(Boolean).length+' capas encontradas · '+v.filter(x=>x==='').length+' sem resultado · '+songs.filter(y=>covers[ck(y)]===undefined).length+' por procurar'}}
 async function loadCovers(){
   if(covRun||cfg.covers===false)return;covRun=true;
   try{for(;;){if(cfg.covers===false)break;
-      const x=songs.find(y=>covers[ck(y)]===undefined&&!covErr.has(ck(y))&&tagsDone(y));if(!x)break;
-      await coverOne(x).catch(()=>covErr.add(ck(x)));
+      const x=covOrder().find(y=>covers[ck(y)]===undefined&&!covErr.has(ck(y))&&tagsDone(y));if(!x)break;
+      const r=await coverOne(x).catch(()=>{covErr.add(ck(x));return 'ok'});
+      if(r==='err'){if(++covFails>=5){covFails=0;break}await new Promise(r=>setTimeout(r,30000));continue}covFails=0;
+      updCovStat();
       await new Promise(r=>setTimeout(r,3200))}}  // a Apple limita a ~20 pedidos por minuto
   finally{covRun=false}}
 async function pickCover(x){
@@ -720,6 +728,8 @@ Object.keys(covers).forEach(k=>{const v=covers[k];if(!v)return;
   if(v==='idb'){idb.get(k).then(b=>{if(covers[k]!=='idb')return;if(b){covUrl[k]=URL.createObjectURL(b);paint(k)}else{delete covers[k];saveCovers()}}).catch(()=>{});return}
   if(/^data:/.test(v)){try{storeCover(k,dataToBlob(v),v)}catch(e){}return}  // migra capas antigas do localStorage
   covUrl[k]=v});
+drive=drive.map(x=>parseName(x.id,x.fn||x.title,x.d));manual=manual.map(x=>parseName(x.id,x.fn||x.title,x.d));
+if(st.get('covVer',0)<2){Object.keys(covers).forEach(k=>{if(!covers[k])delete covers[k]});st.set('covers',covers);st.set('covVer',2)}  // repete as pesquisas que falharam com o artista errado
 build();render();ui();restore();loadTags();loadCovers();
 if(cfg.key&&cfg.folder)sync(drive.length>0);
 setInterval(()=>{if(document.visibilityState==='visible')sync(true)},60000);
