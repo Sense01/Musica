@@ -313,7 +313,7 @@ async function sync(silent){
   if(!silent){msg='A sincronizar…';render()}
   try{let all=[],tok='';
     do{const q=encodeURIComponent(`'${cfg.folder}' in parents and trashed=false`);
-      const r=await fetch(`https://www.googleapis.com/drive/v3/files?q=${q}&fields=nextPageToken,files(id,name,mimeType,createdTime)&pageSize=1000&key=${encodeURIComponent(cfg.key)}${tok?'&pageToken='+tok:''}`);
+      const r=await fetch(`https://www.googleapis.com/drive/v3/files?q=${q}&fields=nextPageToken,files(id,name,mimeType,createdTime)&pageSize=1000&key=${encodeURIComponent(cfg.key)}${tok?'&pageToken='+encodeURIComponent(tok):''}`);
       const j=await r.json();if(j.error)throw new Error(j.error.message);
       all=all.concat(j.files||[]);tok=j.nextPageToken||''}while(tok);
     lrc={};all.forEach(f=>{if(/\.lrc$/i.test(f.name))lrc[norm(f.name.replace(/\.lrc$/i,'').replace(/_/g,' '))]=f.id});st.set('lrc',lrc);
@@ -330,7 +330,7 @@ async function sync(silent){
 function rowH(s,i){const on=cur&&cur.id===s.id;
   return`<div class="row${on?' cur':''}" data-i="${i}" role="button" tabindex="0"><div class="art${hc(s)}" data-ck="${esc(ck(s))}" style="background:${artCss(s)}"><svg><use href="#i-note"/></svg></div>
   <div class="meta"><b>${esc(s.title)}</b><span>${esc(s.artist)}</span></div><span class="dur">${s.du?fmt(s.du):''}</span>
-  <button class="hb" data-m="${s.id}" aria-label="Mais opções">⋯</button><button class="hb${favs.has(s.id)?' on':''}" data-f="${s.id}" aria-label="Favorita"><svg><use href="#i-heart"/></svg></button></div>`}
+  <button class="hb" data-m="${esc(s.id)}" aria-label="Mais opções">⋯</button><button class="hb${favs.has(s.id)?' on':''}" data-f="${esc(s.id)}" aria-label="Favorita"><svg><use href="#i-heart"/></svg></button></div>`}
 function list(arr){return arr.length?arr.map((s,i)=>rowH(s,i)).join(''):'<div class="empty">Nada para mostrar.</div>'}
 function empty(){return`<div class="empty">A tua biblioteca está vazia.<br>Liga a tua pasta do Google Drive para ouvir as tuas músicas.<br><button class="btn" data-v="set">Abrir definições</button></div>`}
 
@@ -347,7 +347,7 @@ function render(){
   else if(view==='lib'){h.textContent='Músicas';shown=sorted(songs);
     c.innerHTML=chips()+'<div><span style="color:var(--tx2);font-size:13px">Ordenar:</span><select class="q" id="so"><option value="nome">Nome</option><option value="artista">Artista</option><option value="recentes">Mais recentes</option></select>'+(cfg.key?'<button class="btn alt" id="rf" style="margin:0 0 12px 8px">Atualizar</button>':'')+'</div>'+(songs.length?list(shown):empty());
     $('#so').value=sortBy;$('#so').onchange=e=>{sortBy=e.target.value;st.set('sort',sortBy);render()};
-    const rf=$('#rf');if(rf)rf.onclick=async()=>{toast('A atualizar…');await sync(true);toast('Biblioteca atualizada · '+songs.length+' músicas')}}
+    const rf=$('#rf');if(rf)rf.onclick=async()=>{if(busy)return toast('Já está a sincronizar…');toast('A atualizar…');await sync(true);toast('Biblioteca atualizada · '+songs.length+' músicas')}}
   else if(view==='lyrics'){h.textContent='Letra';c.innerHTML='<div id="ly"><div class="empty">A carregar…</div></div>';loadLyrics()}
   else if(view==='albums'){h.textContent='Álbuns';const g=new Map();songs.forEach(x=>{if(x.album){const k=ck(x);if(!g.has(k))g.set(k,[]);g.get(k).push(x)}});
     const ks=[...g.keys()].sort((p,q)=>g.get(p)[0].album.localeCompare(g.get(q)[0].album,'pt'));
@@ -392,7 +392,7 @@ function render(){
     <label style="margin-top:8px;display:flex;gap:8px;align-items:center;color:var(--tx)"><input type="checkbox" id="cv" ${cfg.covers!==false?'checked':''}> Procurar capas online quando o ficheiro não tem (envia artista e título ao iTunes da Apple)</label>
     <button class="btn alt" id="rc" style="justify-self:start">Voltar a procurar capas em falta</button>
     <label style="margin-top:22px">Ou adiciona uma música avulsa (ligação do ficheiro)</label>
-    <input class="q" id="ml" placeholder="https://drive.google.com/file/d/…" style="margin:0"><input class="q" id="mn" placeholder="Artista - Título" style="margin:0">
+    <input class="q" id="ml" placeholder="https://drive.google.com/file/d/…" style="margin:0"><input class="q" id="mname" placeholder="Artista - Título" style="margin:0">
     <button class="btn alt" id="ad">Adicionar música</button><div id="msg">${esc(msg)}</div>
     ${manual.length?'<button class="btn alt" id="cl">Remover músicas avulsas</button>':''}<small style="margin-top:18px">Versão 16 · capas automáticas</small></div>`;
     $('#cv').onchange=e=>{cfg.covers=e.target.checked;st.set('cfg',cfg);if(cfg.covers)loadCovers()};
@@ -401,7 +401,7 @@ function render(){
     $('#tg').onchange=e=>{cfg.tags=e.target.checked;st.set('cfg',cfg);if(cfg.tags)loadTags()};
     $('#sv').onclick=()=>{cfg={...cfg,key:$('#k').value.trim(),folder:fid($('#f').value)};st.set('cfg',cfg);sync()};
     $('#ad').onclick=()=>{const id=fid($('#ml').value);if(id.length<15){msg='Ligação inválida.';return render()}
-      manual.push(parse({id,name:$('#mn').value.trim()||'Música '+(manual.length+1)}));st.set('manual',manual);build();msg='Música adicionada.';render()};
+      manual.push(parse({id,name:$('#mname').value.trim()||'Música '+(manual.length+1)}));st.set('manual',manual);build();msg='Música adicionada.';render()};
     if($('#cl'))$('#cl').onclick=()=>{manual=[];st.set('manual',manual);build();msg='';render()}}
 }
 
@@ -535,7 +535,7 @@ async function tagRead(x){
 let tagRun=false;
 async function loadTags(){
   if(tagRun||cfg.tags===false||!cfg.key)return;tagRun=true;let n=0;
-  try{for(;;){const todo=songs.filter(x=>meta[x.id]===undefined&&!bad.has(x.id)&&!manual.some(y=>y.id===x.id)).slice(0,2);if(!todo.length)break;
+  try{for(;;){if(cfg.tags===false||!cfg.key)break;const todo=songs.filter(x=>meta[x.id]===undefined&&!bad.has(x.id)&&!manual.some(y=>y.id===x.id)).slice(0,2);if(!todo.length)break;
       await Promise.all(todo.map(x=>tagOne(x).catch(()=>{})));n+=todo.length;
       if(n%10===0){build();refresh()}}}
   finally{tagRun=false;if(n){build();refresh()}loadCovers()}}
@@ -627,7 +627,7 @@ function ui(){
   const icon=au.paused?'#i-play':'#i-pause';$$('.pp').forEach(u=>u.setAttribute('href',icon));
   $$('#shuf,#shuf2').forEach(b=>b.classList.toggle('on',shuffle));
   $$('#rep,#rep2').forEach(b=>{b.classList.toggle('on',repeat>0);b.classList.toggle('one',repeat===1)});
-  au.loop=repeat===1;
+  au.loop=false;
   $$('#rep,#rep2').forEach(b=>b.title=['Repetir: desativado','Repetir uma música','Repetir tudo'][repeat]);
   $$('.row').forEach(r=>{const x=shown[r.dataset.i];r.classList.toggle('cur',!!(x&&cur&&x.id===cur.id))});
   if(s)document.title=s.title+' · Drums'}
@@ -638,6 +638,7 @@ function play(i,from){
   base=arr.slice();queue=arr.slice();if(shuffle){const c=arr[i];queue=arr.filter((_,k)=>k!==i).sort(()=>Math.random()-.5);queue.unshift(c);qi=0}else qi=i;
   load()}
 function load(){cur=queue[qi];if(view==='lyrics')setTimeout(loadLyrics,0);{const x=cur;tagOne(x).then(()=>coverOne(x)).then(()=>{if(cur===x){ui();media()}}).catch(()=>{})}hist=[cur.id,...hist.filter(i=>i!==cur.id)].slice(0,30);st.set('hist',hist);au.src=url(cur);au.play().catch(()=>{});ui();media()}
+function playRow(i){if(!(i>=0))return;if(view==='queue'){if(qi+1+i<queue.length){qi=qi+1+i;load()}return}play(i)}
 function nav(d){if(!queue.length)return;let n=qi+d;
   if(n>=queue.length){if(repeat===2)n=0;else return au.pause()}
   if(n<0)n=0;qi=n;load()}
@@ -666,7 +667,7 @@ function tick(){const d=au.duration,t=au.currentTime,p=d?t/d:0;lyTick();
   $('#cur').textContent=$('#tCur').textContent=fmt(t);$('#dur').textContent=fmt(d);$('#tDur').textContent=d?'-'+fmt(d-t):'-0:00';
   if('mediaSession'in navigator&&d&&navigator.mediaSession.setPositionState)try{navigator.mediaSession.setPositionState({duration:d,position:Math.min(t,d),playbackRate:au.playbackRate||1})}catch{}}
 au.ontimeupdate=tick;au.onloadedmetadata=tick;
-au.addEventListener('loadedmetadata',()=>{if(cur&&isFinite(au.duration)){const d=Math.round(au.duration);if(!cur.du||Math.abs(cur.du-d)>1){cur.du=d;(meta[cur.id]=meta[cur.id]||{}).du=d;saveMeta();$$('.row.cur .dur').forEach(e=>e.textContent=fmt(d))}}});
+au.addEventListener('loadedmetadata',()=>{if(cur&&isFinite(au.duration)){const d=Math.round(au.duration);if(!cur.du||Math.abs(cur.du-d)>1){cur.du=d;if(meta[cur.id]!==undefined&&!tagging.has(cur.id)){meta[cur.id].du=d;saveMeta()}$$('.row.cur .dur').forEach(e=>e.textContent=fmt(d))}}});
 function skip(dt){if(au.duration)au.currentTime=Math.max(0,Math.min(au.duration,au.currentTime+dt))}
 ['#seek','#tSeek'].forEach(i=>{const k=$(i);
   k.oninput=()=>{k.dataset.d=1;const v=k.value/1000;k.style.setProperty('--p',v*100+'%');
@@ -684,7 +685,7 @@ document.addEventListener('click',e=>{
   const mm=e.target.closest('[data-m]');if(mm){e.stopPropagation();const x=songs.find(y=>y.id===mm.dataset.m);if(x)songMenu(x);return}
   const d=e.target.closest('[data-d]');if(d){e.stopPropagation();const id=d.dataset.d||(cur&&cur.id);dl(songs.find(x=>x.id===id));return}
   const f=e.target.closest('[data-f]');if(f){const id=f.dataset.f;favs.has(id)?favs.delete(id):favs.add(id);st.set('favs',[...favs]);if(view==='fav')shown=songs.filter(s=>favs.has(s.id));f.classList.toggle('on');if(view==='fav')render();return}
-  const r=e.target.closest('[data-i]');if(r){const i=+r.dataset.i;if(i>=0)play(i);return}
+  const r=e.target.closest('[data-i]');if(r){playRow(+r.dataset.i);return}
   if(e.target.closest('#mini'))$('#sheet').classList.add('open')});
 const sh=$('#sheet'),shut=()=>{sh.classList.remove('open');sh.style.transform='';sh.style.transition=''};
 $('#close').onclick=shut;$('#close2').onclick=shut;
@@ -697,9 +698,9 @@ sh.addEventListener('touchend',e=>{if(ty==null)return;const dy=e.changedTouches[
   if(dragging&&(dy>110||(dy>40&&v>.5)))shut();else reset();ty=null;dragging=false});
 sh.addEventListener('touchcancel',reset);
 document.addEventListener('keydown',e=>{if(e.key==='Escape')shut()});
-document.addEventListener('keydown',e=>{if((e.key==='ArrowRight'||e.key==='ArrowLeft')&&!/INPUT/.test(e.target.tagName)){e.preventDefault();skip(e.key==='ArrowRight'?10:-10)}
-  if(e.key==='Enter'&&e.target.classList.contains('row'))play(+e.target.dataset.i);
-  if(e.code==='Space'&&!/INPUT|BUTTON/.test(e.target.tagName)){e.preventDefault();toggle()}});
+document.addEventListener('keydown',e=>{if((e.key==='ArrowRight'||e.key==='ArrowLeft')&&!/INPUT|TEXTAREA|SELECT/.test(e.target.tagName)){e.preventDefault();skip(e.key==='ArrowRight'?10:-10)}
+  if(e.key==='Enter'&&e.target.classList.contains('row'))playRow(+e.target.dataset.i);
+  if(e.code==='Space'&&!/INPUT|TEXTAREA|SELECT|BUTTON/.test(e.target.tagName)){e.preventDefault();toggle()}});
 $$('#shuf,#shuf2').forEach(b=>b.onclick=()=>{shuffle=!shuffle;
   if(cur&&base.length){if(shuffle){queue=[cur,...base.filter(x=>x.id!==cur.id).sort(()=>Math.random()-.5)];qi=0}else{queue=base.slice();qi=Math.max(0,queue.findIndex(x=>x.id===cur.id))}}
   toast(shuffle?'Aleatório ativado':'Aleatório desativado');ui()});
