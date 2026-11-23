@@ -92,6 +92,8 @@ h2{font-size:20px;font-weight:700;margin:26px 0 12px}
 .mnh{padding:12px 14px;font-weight:600;color:var(--tx2);font-size:13px}
 .mi{display:block;width:100%;text-align:left;padding:13px 14px;border-radius:10px;font-size:16px}
 .mi:hover{background:rgba(128,128,128,.18)}
+.mi.wi{display:flex;align-items:center;gap:12px}
+.mimg{width:46px;height:46px;border-radius:6px;flex:none;object-fit:cover;background:var(--ln)}
 @media(min-width:861px){#mn{align-items:center}.mnb{border-radius:16px}}
 select.q{appearance:auto;width:auto;display:inline-block;margin:0 0 12px 8px;padding:8px 10px}
 .ib{font-size:20px;color:var(--tx2);padding:6px}.ib:hover{color:var(--ac)}
@@ -318,7 +320,7 @@ async function sync(silent){
     const nd=all.filter(f=>/^audio\//.test(f.mimeType)||/\.(mp3|m4a|aac|wav|flac|ogg|opus)$/i.test(f.name)).map(parse);
     const changed=sig(nd)!==sig(drive);
     if(changed){drive=nd;st.set('drive3',drive);build();restore()}
-    loadTags();
+    loadTags();loadCovers();
     lastSync=Date.now();
     if(!silent)msg=drive.length+' músicas encontradas.';
     else if(changed){toast('Biblioteca atualizada · '+drive.length+' músicas');refresh()}}
@@ -326,7 +328,7 @@ async function sync(silent){
   busy=false;if(!silent)render()}
 
 function rowH(s,i){const on=cur&&cur.id===s.id;
-  return`<div class="row${on?' cur':''}" data-i="${i}" role="button" tabindex="0"><div class="art${hc(s)}" style="background:${artCss(s)}"><svg><use href="#i-note"/></svg></div>
+  return`<div class="row${on?' cur':''}" data-i="${i}" role="button" tabindex="0"><div class="art${hc(s)}" data-ck="${esc(ck(s))}" style="background:${artCss(s)}"><svg><use href="#i-note"/></svg></div>
   <div class="meta"><b>${esc(s.title)}</b><span>${esc(s.artist)}</span></div><span class="dur">${s.du?fmt(s.du):''}</span>
   <button class="hb" data-m="${s.id}" aria-label="Mais opções">⋯</button><button class="hb${favs.has(s.id)?' on':''}" data-f="${s.id}" aria-label="Favorita"><svg><use href="#i-heart"/></svg></button></div>`}
 function list(arr){return arr.length?arr.map((s,i)=>rowH(s,i)).join(''):'<div class="empty">Nada para mostrar.</div>'}
@@ -338,7 +340,7 @@ function render(){
   const h=$('#h'),c=$('#c');
   const ak=x=>x.artist==='Google Drive'?'Sem artista':x.artist;
   const chips=()=>'<div class="chips">'+[['lib','Músicas'],['artists','Artistas'],['albums','Álbuns'],['pls','Playlists'],['queue','Fila']].map(([v,t])=>`<button class="chip${view===v?' on':''}" data-v="${v}">${t}</button>`).join('')+'</div>';
-  const card=(x,i)=>`<button class="card" data-i="${i}"><div class="art${hc(x)}" style="background:${artCss(x)}"><svg width="40" height="40"><use href="#i-note"/></svg></div><b>${esc(x.title)}</b><span>${esc(x.artist)}</span></button>`;
+  const card=(x,i)=>`<button class="card" data-i="${i}"><div class="art${hc(x)}" data-ck="${esc(ck(x))}" style="background:${artCss(x)}"><svg width="40" height="40"><use href="#i-note"/></svg></div><b>${esc(x.title)}</b><span>${esc(x.artist)}</span></button>`;
   if(view==='home'){h.textContent='Ouvir agora';
     const A=hist.map(i=>songs.find(x=>x.id===i)).filter(Boolean).slice(0,12),B=[...songs].sort((p,q)=>(q.d||'').localeCompare(p.d||'')).slice(0,24);shown=[...A,...B];
     c.innerHTML=songs.length?(A.length?'<h2 style="margin-top:0">Ouvidas recentemente</h2><div class="grid">'+A.map(card).join('')+'</div>':'')+'<h2'+(A.length?'':' style="margin-top:0"')+'>Adicionadas recentemente</h2><div class="grid">'+B.map((x,i)=>card(x,A.length+i)).join('')+'</div>':empty()}
@@ -349,7 +351,7 @@ function render(){
   else if(view==='lyrics'){h.textContent='Letra';c.innerHTML='<div id="ly"><div class="empty">A carregar…</div></div>';loadLyrics()}
   else if(view==='albums'){h.textContent='Álbuns';const g=new Map();songs.forEach(x=>{if(x.album){const k=ck(x);if(!g.has(k))g.set(k,[]);g.get(k).push(x)}});
     const ks=[...g.keys()].sort((p,q)=>g.get(p)[0].album.localeCompare(g.get(q)[0].album,'pt'));
-    c.innerHTML=chips()+(ks.length?'<div class="grid">'+ks.map(k=>{const x=g.get(k)[0];return`<button class="card" data-v="album" data-g="${esc(k)}"><div class="art${hc(x)}" style="background:${artCss(x)}"><svg width="40" height="40"><use href="#i-note"/></svg></div><b>${esc(x.album)}</b><span>${esc(x.artist)} · ${g.get(k).length}</span></button>`}).join('')+'</div>':'<div class="empty">Ainda não há álbuns.<br>As etiquetas dos ficheiros estão a ser lidas (precisa da chave de API e de alguns minutos).</div>')}
+    c.innerHTML=chips()+(ks.length?'<div class="grid">'+ks.map(k=>{const x=g.get(k)[0];return`<button class="card" data-v="album" data-g="${esc(k)}"><div class="art${hc(x)}" data-ck="${esc(k)}" style="background:${artCss(x)}"><svg width="40" height="40"><use href="#i-note"/></svg></div><b>${esc(x.album)}</b><span>${esc(x.artist)} · ${g.get(k).length}</span></button>`}).join('')+'</div>':'<div class="empty">Ainda não há álbuns.<br>As etiquetas dos ficheiros estão a ser lidas (precisa da chave de API e de alguns minutos).</div>')}
   else if(view==='album'){shown=songs.filter(x=>x.album&&ck(x)===arg).sort((p,q)=>(p.k||999)-(q.k||999)||p.title.localeCompare(q.title,'pt'));
     h.textContent=shown[0]?shown[0].album:'Álbum';c.innerHTML='<button class="btn" id="pa" style="margin:0 0 12px">Tocar álbum</button>'+list(shown);$('#pa').onclick=()=>shown.length&&play(0)}
   else if(view==='artists'){h.textContent='Artistas';const g=new Map();songs.forEach(x=>{const k=ak(x);g.set(k,(g.get(k)||0)+1)});
@@ -387,10 +389,14 @@ function render(){
     <button class="btn" id="sv">Guardar e sincronizar</button>
     <label style="margin-top:14px;display:flex;gap:8px;align-items:center;color:var(--tx)"><input type="checkbox" id="tg" ${cfg.tags!==false?'checked':''}> Ler capas, álbuns e duração dos ficheiros (usa dados)</label>
     <label style="margin-top:8px;display:flex;gap:8px;align-items:center;color:var(--tx)"><input type="checkbox" id="lo" ${cfg.online!==false?'checked':''}> Procurar letras online (envia artista e título ao lrclib.net)</label>
+    <label style="margin-top:8px;display:flex;gap:8px;align-items:center;color:var(--tx)"><input type="checkbox" id="cv" ${cfg.covers!==false?'checked':''}> Procurar capas online quando o ficheiro não tem (envia artista e título ao iTunes da Apple)</label>
+    <button class="btn alt" id="rc" style="justify-self:start">Voltar a procurar capas em falta</button>
     <label style="margin-top:22px">Ou adiciona uma música avulsa (ligação do ficheiro)</label>
     <input class="q" id="ml" placeholder="https://drive.google.com/file/d/…" style="margin:0"><input class="q" id="mn" placeholder="Artista - Título" style="margin:0">
     <button class="btn alt" id="ad">Adicionar música</button><div id="msg">${esc(msg)}</div>
-    ${manual.length?'<button class="btn alt" id="cl">Remover músicas avulsas</button>':''}<small style="margin-top:18px">Versão 15 · letras automáticas</small></div>`;
+    ${manual.length?'<button class="btn alt" id="cl">Remover músicas avulsas</button>':''}<small style="margin-top:18px">Versão 16 · capas automáticas</small></div>`;
+    $('#cv').onchange=e=>{cfg.covers=e.target.checked;st.set('cfg',cfg);if(cfg.covers)loadCovers()};
+    $('#rc').onclick=()=>{let n=0;Object.keys(covers).forEach(k=>{if(!covers[k]){delete covers[k];n++}});covErr.clear();saveCovers();toast(n?'A procurar '+n+' capas em falta…':'A procurar capas…');loadCovers()};
     $('#lo').onchange=e=>{cfg.online=e.target.checked;st.set('cfg',cfg)};
     $('#tg').onchange=e=>{cfg.tags=e.target.checked;st.set('cfg',cfg);if(cfg.tags)loadTags()};
     $('#sv').onclick=()=>{cfg={...cfg,key:$('#k').value.trim(),folder:fid($('#f').value)};st.set('cfg',cfg);sync()};
@@ -446,7 +452,8 @@ const sorted=a=>{const x=[...a],k=y=>y.artist==='Google Drive'?'Sem artista':y.a
   else if(sortBy==='recentes')x.sort((p,q)=>(q.d||'').localeCompare(p.d||''));return x};
 function newPl(){const n=(prompt('Nome da playlist')||'').trim();if(!n)return null;const p={id:'p'+Date.now().toString(36),name:n,ids:[]};pls.push(p);savePl();return p}
 function menu(t,items){$('#mnh').textContent=t;const c=$('#mni');c.innerHTML='';
-  items.forEach(it=>{const b=document.createElement('button');b.className='mi';b.textContent=it.t;b.onclick=()=>{closeMenu();it.fn&&it.fn()};c.appendChild(b)});
+  items.forEach(it=>{const b=document.createElement('button');b.className='mi';b.textContent=it.t;
+    if(it.img){const im=new Image();im.className='mimg';im.alt='';im.loading='lazy';im.src=it.img;b.prepend(im);b.classList.add('wi')}b.onclick=()=>{closeMenu();it.fn&&it.fn()};c.appendChild(b)});
   $('#mn').classList.add('on')}
 const closeMenu=()=>$('#mn').classList.remove('on');
 $('#mn').onclick=e=>{if(e.target.id==='mn')closeMenu()};
@@ -458,6 +465,7 @@ function songMenu(x){const it=[{t:'Tocar a seguir',fn:()=>enq(x,true)},{t:'Adici
   {t:favs.has(x.id)?'Remover das favoritas':'Adicionar às favoritas',fn:()=>{favs.has(x.id)?favs.delete(x.id):favs.add(x.id);st.set('favs',[...favs]);if(view==='fav')shown=songs.filter(y=>favs.has(y.id));refresh()}}];
   if(x.artist!=='Google Drive')it.push({t:'Ver '+x.artist,fn:()=>go('artist',x.artist)});
   if(view==='pl')it.push({t:'Remover desta playlist',fn:()=>{const p=pls.find(y=>y.id===arg);p.ids=p.ids.filter(i=>i!==x.id);savePl();render()}});
+  it.push({t:'Escolher capa…',fn:()=>pickCover(x)});
   it.push({t:'Transferir',fn:()=>dl(x)});menu(x.title,it)}
 function sleepMenu(){const set=m=>{clearTimeout(sleepT);sleepEnd=false;
     if(m>0){sleepT=setTimeout(()=>{au.pause();toast('Temporizador terminou')},m*60000);toast('Pausa daqui a '+m+' min')}
@@ -469,11 +477,12 @@ function moreMenu(){menu('Opções',[{t:'Letra',fn:()=>{shut();go('lyrics')}},{t
 function saveLast(){if(!cur)return;st.set('last',{id:cur.id,t:au.currentTime||0,q:queue.map(x=>x.id),qi})}
 function restore(){const l=st.get('last',null);if(!l||cur||!songs.length)return;const x=songs.find(y=>y.id===l.id);if(!x)return;
   const q=(l.q||[]).map(i=>songs.find(y=>y.id===i)).filter(Boolean);queue=q.length?q:[x];base=queue.slice();qi=Math.max(0,queue.findIndex(y=>y.id===x.id));cur=x;au.src=url(x);
-  au.addEventListener('loadedmetadata',()=>{if(l.t>1&&l.t<au.duration)au.currentTime=l.t},{once:true});ui()}
+  au.addEventListener('loadedmetadata',()=>{if(l.t>1&&l.t<au.duration)au.currentTime=l.t},{once:true});ui();
+  tagOne(x).then(()=>coverOne(x)).then(()=>{if(cur===x){ui();media()}}).catch(()=>{})}
 setInterval(saveLast,5000);au.addEventListener('pause',saveLast);document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden')saveLast()});
 const ck=x=>x.album?x.artist+'|'+x.album:'id:'+x.id;
 const cov=x=>covUrl[ck(x)],hc=x=>cov(x)?' hasart':'';
-const artCss=x=>cov(x)?`url(${cov(x)}) center/cover`:bg(x.title);
+const artCss=x=>cov(x)?`url('${cov(x)}') center/cover`:bg(x.title);
 function applyMeta(x){const m=meta[x.id];if(!m)return;if(m.t)x.title=m.t;if(m.a)x.artist=m.a;if(m.l)x.album=m.l;if(m.du)x.du=m.du;if(m.k)x.k=m.k}
 let sv1=0,sv2=0;
 const saveMeta=()=>{clearTimeout(sv1);sv1=setTimeout(()=>st.set('meta',meta),1500)},saveCovers=()=>{clearTimeout(sv2);sv2=setTimeout(()=>st.set('covers',covers),1500)};
@@ -516,7 +525,9 @@ async function thumb(img){const bl=new Blob([img],{type:img[0]===255?'image/jpeg
   finally{URL.revokeObjectURL(uu)}}
 async function tagOne(x){
   if(!x||meta[x.id]!==undefined||cfg.tags===false||!cfg.key||manual.some(y=>y.id===x.id))return;
-  meta[x.id]={};
+  meta[x.id]={};tagging.add(x.id);
+  try{await tagRead(x)}finally{tagging.delete(x.id)}}
+async function tagRead(x){
   let r=null;try{r=await readTag(x)}catch(e){delete meta[x.id];bad.add(x.id);return}
   if(r){const m={};if(r.t)m.t=r.t;if(r.a)m.a=r.a;if(r.l)m.l=r.l;if(+r.n>0)m.du=Math.round(+r.n/1000);const k=parseInt(r.k);if(k>0)m.k=k;meta[x.id]=m;applyMeta(x);
     if(r.img){const key=ck(x);if(!covUrl[key]){try{const dd=await thumb(r.img);covers[key]=dd;covUrl[key]=dataToUrl(dd);saveCovers()}catch(e){}}}}
@@ -527,7 +538,57 @@ async function loadTags(){
   try{for(;;){const todo=songs.filter(x=>meta[x.id]===undefined&&!bad.has(x.id)&&!manual.some(y=>y.id===x.id)).slice(0,2);if(!todo.length)break;
       await Promise.all(todo.map(x=>tagOne(x).catch(()=>{})));n+=todo.length;
       if(n%10===0){build();refresh()}}}
-  finally{tagRun=false;if(n){build();refresh()}}}
+  finally{tagRun=false;if(n){build();refresh()}loadCovers()}}
+
+// ---- Capas online (iTunes Search API) ----
+const tagging=new Set(),covErr=new Set();
+const tagsDone=x=>cfg.tags===false||!cfg.key||manual.some(y=>y.id===x.id)||bad.has(x.id)||(meta[x.id]!==undefined&&!tagging.has(x.id));
+const big=u=>u?u.replace(/\/\d+x\d+(bb)?\.(jpg|png|webp)$/i,'/600x600bb.jpg'):'';
+const clean=s=>String(s||'').replace(/[\(\[][^\)\]]*(official|video|v[ií]deo|audio|[áa]udio|lyric|letra|clip|hd|4k|remaster|visuali[sz]er)[^\)\]]*[\)\]]/gi,'').replace(/\s+/g,' ').trim();
+const mainArtist=x=>x.artist==='Google Drive'?'':x.artist.split(/,|&|\bfeat\.?\b|\bft\.?\b/i)[0].trim();
+function jsonp(u){return new Promise((res,rej)=>{const cb='itcb'+Date.now().toString(36)+Math.random().toString(36).slice(2,7),s=document.createElement('script');let t;
+  const done=()=>{clearTimeout(t);delete window[cb];s.remove()};
+  window[cb]=d=>{done();res(d)};s.onerror=()=>{done();rej(0)};t=setTimeout(()=>{done();rej(0)},12000);
+  s.src=u+'&callback='+cb;document.head.appendChild(s)})}
+async function itunes(p){
+  const u='https://itunes.apple.com/search?'+new URLSearchParams({media:'music',limit:'10',country:(navigator.language||'').split('-')[1]||'PT',...p});
+  try{const r=await fetch(u);if(r.ok){const j=await r.json();return j.results||[]}}catch(e){}
+  try{const j=await jsonp(u);return j.results||[]}catch(e){return null}}
+function pickArt(res,x,alb){
+  const a=norm(mainArtist(x)),t=norm(clean(alb?x.album:x.title));let best=null,bs=0;
+  for(const r of res){if(!r.artworkUrl100)continue;const ra=norm(r.artistName),rt=norm(clean(alb?r.collectionName:r.trackName));
+    let sc=0;if(a&&ra&&(ra.includes(a)||a.includes(ra)))sc+=2;if(t&&rt&&(rt===t||rt.includes(t)||t.includes(rt)))sc+=1;
+    if(sc>bs){bs=sc;best=r}}
+  return best&&bs>=(a?3:1)?big(best.artworkUrl100):null}
+function paint(key){const u=covUrl[key];
+  if(!u){refresh();if(cur&&ck(cur)===key){ui();media()}return}
+  $$('[data-ck]').forEach(e=>{if(e.dataset.ck===key){e.style.background=`url('${u}') center/cover`;e.classList.add('hasart')}});
+  if(cur&&ck(cur)===key){ui();media()}}
+async function coverOne(x){
+  if(!x||cfg.covers===false)return 'skip';const key=ck(x);if(covers[key]!==undefined||covErr.has(key))return 'skip';
+  const alb=!!x.album,ar=mainArtist(x);
+  let res=await itunes({term:(ar+' '+clean(alb?x.album:x.title)).trim(),entity:alb?'album':'song'});
+  if(res==null){covErr.add(key);return 'err'}
+  if(ck(x)!==key||covers[key]!==undefined)return 'ok';
+  let u=pickArt(res,x,alb);
+  if(!u&&alb){const r2=await itunes({term:(ar+' '+clean(x.title)).trim(),entity:'song'});if(r2)u=pickArt(r2,x,false)}
+  covers[key]=u||'';if(u){covUrl[key]=u;paint(key)}saveCovers();return 'ok'}
+let covRun=false;
+async function loadCovers(){
+  if(covRun||cfg.covers===false)return;covRun=true;
+  try{for(;;){if(cfg.covers===false)break;
+      const x=songs.find(y=>covers[ck(y)]===undefined&&!covErr.has(ck(y))&&tagsDone(y));if(!x)break;
+      await coverOne(x).catch(()=>covErr.add(ck(x)));
+      await new Promise(r=>setTimeout(r,3200))}}  // a Apple limita a ~20 pedidos por minuto
+  finally{covRun=false}}
+async function pickCover(x){
+  toast('A procurar capas…');const ar=mainArtist(x);
+  const [a,b]=await Promise.all([itunes({term:(ar+' '+clean(x.title)).trim(),entity:'song',limit:'10'}),x.album?itunes({term:(ar+' '+clean(x.album)).trim(),entity:'album',limit:'5'}):Promise.resolve([])]);
+  if(a==null&&!(b&&b.length))return toast('Não foi possível ligar ao iTunes');
+  const seen=new Set(),opts=[...(b||[]),...(a||[])].filter(r=>{const u=big(r.artworkUrl100);if(!u||seen.has(u))return false;seen.add(u);return true}).slice(0,10);
+  const set=u=>{const key=ck(x);covers[key]=u;if(u)covUrl[key]=u;else delete covUrl[key];covErr.delete(key);saveCovers();paint(key);toast(u?'Capa atualizada':'Capa removida')};
+  menu('Capa de «'+x.title+'»',[...opts.map(r=>({t:(r.collectionName||r.trackName||'')+' — '+r.artistName,img:r.artworkUrl100,fn:()=>set(big(r.artworkUrl100))})),
+    ...(opts.length?[]:[{t:'Nenhuma capa encontrada'}]),...(cov(x)?[{t:'Remover capa',fn:()=>set('')}]:[])])}
 function parseLrc(t){const out=[];let timed=false;
   for(const raw of t.replace(/\r/g,'').split('\n')){const m=[...raw.matchAll(/\[(\d{1,3}):(\d{2})(?:[.:](\d{1,3}))?\]/g)],tx=raw.replace(/\[[^\]]*\]/g,'').trim();
     if(m.length){timed=true;m.forEach(a=>out.push({t:+a[1]*60+ +a[2]+(a[3]?+('0.'+a[3]):0),s:tx}))}
@@ -576,7 +637,7 @@ function play(i,from){
   const arr=shown.length?shown:songs;if(!arr.length)return;
   base=arr.slice();queue=arr.slice();if(shuffle){const c=arr[i];queue=arr.filter((_,k)=>k!==i).sort(()=>Math.random()-.5);queue.unshift(c);qi=0}else qi=i;
   load()}
-function load(){cur=queue[qi];if(view==='lyrics')setTimeout(loadLyrics,0);tagOne(cur).then(()=>{if(cur===queue[qi]){ui();media()}});hist=[cur.id,...hist.filter(i=>i!==cur.id)].slice(0,30);st.set('hist',hist);au.src=url(cur);au.play().catch(()=>{});ui();media()}
+function load(){cur=queue[qi];if(view==='lyrics')setTimeout(loadLyrics,0);{const x=cur;tagOne(x).then(()=>coverOne(x)).then(()=>{if(cur===x){ui();media()}}).catch(()=>{})}hist=[cur.id,...hist.filter(i=>i!==cur.id)].slice(0,30);st.set('hist',hist);au.src=url(cur);au.play().catch(()=>{});ui();media()}
 function nav(d){if(!queue.length)return;let n=qi+d;
   if(n>=queue.length){if(repeat===2)n=0;else return au.pause()}
   if(n<0)n=0;qi=n;load()}
@@ -590,7 +651,7 @@ async function dl(s){if(!s)return toast('Escolhe primeiro uma música');
     document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),5000);toast('Transferência concluída')}
   catch{window.open('https://drive.google.com/uc?export=download&id='+s.id,'_blank')}}
 function media(){if(!('mediaSession'in navigator)||!cur)return;
-  navigator.mediaSession.metadata=new MediaMetadata({title:cur.title,artist:cur.artist,album:cur.album||'',artwork:cov(cur)?[{src:cov(cur),sizes:'128x128',type:'image/jpeg'}]:[]});
+  navigator.mediaSession.metadata=new MediaMetadata({title:cur.title,artist:cur.artist,album:cur.album||'',artwork:cov(cur)?[{src:cov(cur),sizes:/^https:/.test(cov(cur))?'600x600':'128x128',type:'image/jpeg'}]:[]});
   navigator.mediaSession.setActionHandler('play',()=>au.play());navigator.mediaSession.setActionHandler('pause',()=>au.pause());
   navigator.mediaSession.setActionHandler('nexttrack',()=>nav(1));navigator.mediaSession.setActionHandler('previoustrack',()=>nav(-1));
   const h=(n,f)=>{try{navigator.mediaSession.setActionHandler(n,f)}catch{}};
@@ -646,8 +707,8 @@ $$('#rep,#rep2').forEach(b=>b.onclick=()=>{repeat=(repeat+1)%3;toast(['Repetir: 
 
 addEventListener('offline',()=>toast('Sem internet: a app abre, mas as músicas precisam do Drive'));
 if('serviceWorker'in navigator)addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}));
-Object.keys(covers).forEach(k=>{try{covUrl[k]=dataToUrl(covers[k])}catch(e){}});
-build();render();ui();restore();loadTags();
+Object.keys(covers).forEach(k=>{const v=covers[k];if(!v)return;try{covUrl[k]=/^data:/.test(v)?dataToUrl(v):v}catch(e){}});
+build();render();ui();restore();loadTags();loadCovers();
 if(cfg.key&&cfg.folder)sync(drive.length>0);
 setInterval(()=>{if(document.visibilityState==='visible')sync(true)},60000);
 document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&Date.now()-lastSync>15000)sync(true)});
