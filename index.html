@@ -396,7 +396,7 @@ function render(){
     <label style="margin-top:22px">Ou adiciona uma música avulsa (ligação do ficheiro)</label>
     <input class="q" id="ml" placeholder="https://drive.google.com/file/d/…" style="margin:0"><input class="q" id="mname" placeholder="Artista - Título" style="margin:0">
     <button class="btn alt" id="ad">Adicionar música</button><div id="msg">${esc(msg)}</div>
-    ${manual.length?'<button class="btn alt" id="cl">Remover músicas avulsas</button>':''}<small style="margin-top:18px">Versão 20 · capas (Deezer, iTunes, MusicBrainz)</small></div>`;
+    ${manual.length?'<button class="btn alt" id="cl">Remover músicas avulsas</button>':''}<small style="margin-top:18px">Versão 21 · capas (Deezer, iTunes, MusicBrainz)</small></div>`;
     updCovStat();
     $('#ct').onclick=async()=>{const o=$('#ctr'),L=[];o.textContent='A testar…';
       const x=cur||songs[0];if(!x){o.textContent='Sem músicas na biblioteca.';return}
@@ -568,7 +568,12 @@ const tagging=new Set(),covErr=new Set();
 const tagsDone=x=>cfg.tags===false||!cfg.key||manual.some(y=>y.id===x.id)||bad.has(x.id)||(meta[x.id]!==undefined&&!tagging.has(x.id));
 const big=u=>u?u.replace(/\/\d+x\d+(bb)?\.(jpg|png|webp)$/i,'/600x600bb.jpg'):'';
 const clean=s=>String(s||'').replace(/[\(\[][^\)\]]*[\)\]]/g,' ').replace(/[#@]\S+/g,' ').replace(/\s+-\s+(official|lyric|letra|audio|video|ao vivo|live).*$/i,'').replace(/\s+/g,' ').trim();
-const mainArtist=x=>x.artist==='Google Drive'?'':(x.artist.replace(/[#@]\S+/g,' ').split(/\s*,\s*|\s+&\s+|\s+e\s+|\s+x\s+|\s+(?:feat|ft)\.?\s+/i).map(t=>t.trim()).filter(Boolean)[0]||'');
+const artistParts=x=>x.artist==='Google Drive'?[]:x.artist.replace(/[#@]\S+/g,' ').split(/\s*,\s*|\s+&\s+|\s+e\s+|\s+and\s+|\s+x\s+|\s+(?:feat|ft)\.?\s+/i).map(t=>t.trim()).filter(t=>norm(t).length>1);
+// para pesquisar: artista completo («Felipe & Rodrigo»), sem convidados («feat. …»), hashtags nem @
+const mainArtist=x=>x.artist==='Google Drive'?'':x.artist.replace(/[#@]\S+/g,' ').replace(/\s+(?:feat|ft)\.?\s+.*$/i,'').replace(/\s+/g,' ').trim();
+const lev=(a,b)=>{const m=a.length,n=b.length;if(!m||!n)return Math.max(m,n);let p=[...Array(n+1).keys()];for(let i=1;i<=m;i++){const c=[i];for(let j=1;j<=n;j++)c[j]=Math.min(p[j]+1,c[j-1]+1,p[j-1]+(a[i-1]===b[j-1]?0:1));p=c}return p[n]};
+const sameTitle=(t,rt)=>!!(t&&rt&&(rt===t||rt.includes(t)||t.includes(rt)||1-lev(t,rt)/Math.max(t.length,rt.length)>=.8));
+const sameArtist=(x,ra)=>{const pr=' '+ra+' ',parts=artistParts(x).map(norm);return parts.some(a=>pr.includes(' '+a+' ')||(' '+a+' ').includes(pr))||(!!parts.length&&norm(x.artist)===ra)};
 function jsonp(u){return new Promise((res,rej)=>{const cb='itcb'+Date.now().toString(36)+Math.random().toString(36).slice(2,7),s=document.createElement('script');let t;
   const done=()=>{clearTimeout(t);delete window[cb];s.remove()};
   window[cb]=d=>{done();res(d)};s.onerror=()=>{done();rej(0)};t=setTimeout(()=>{done();rej(0)},12000);
@@ -601,9 +606,9 @@ async function askSrc(name,fn,term,kind,ar,ti){
   if(r==null){srcFail[name]++;srcStat[name]='falhou';return null}
   srcFail[name]=0;srcStat[name]='ok';return r.map(o=>({...o,src:name}))}
 function pickArt(res,x,alb,all){
-  const a=norm(mainArtist(x)),t=norm(clean(alb?x.album:x.title)),ok=[];
+  const a=artistParts(x).length>0,t=norm(clean(alb?x.album:x.title)),ok=[];
   for(const r of res){if(!r.img)continue;const ra=norm(r.a),rt=norm(clean(alb?r.l:r.t));
-    let sc=0;if(a&&ra&&((' '+ra+' ').includes(' '+a+' ')||(' '+a+' ').includes(' '+ra+' ')))sc+=2;if(t&&rt&&(rt===t||rt.includes(t)||t.includes(rt)))sc+=1;
+    let sc=0;if(a&&ra&&sameArtist(x,ra))sc+=2;if(sameTitle(t,rt))sc+=1;
     if(sc>=(a?3:1))ok.push(r)}
   return all?ok:ok[0]||null}
 const imgOk=u=>fetch(u,{method:'HEAD'}).then(r=>r.ok).catch(()=>false);
