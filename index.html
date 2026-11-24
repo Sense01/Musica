@@ -315,7 +315,7 @@ async function sync(silent){
   if(!silent){msg='A sincronizar…';render()}
   try{let all=[],tok='';
     do{const q=encodeURIComponent(`'${cfg.folder}' in parents and trashed=false`);
-      const r=await fetch(`https://www.googleapis.com/drive/v3/files?q=${q}&fields=nextPageToken,files(id,name,mimeType,createdTime)&pageSize=1000&key=${encodeURIComponent(cfg.key)}${tok?'&pageToken='+encodeURIComponent(tok):''}`);
+      const r=await fetch(`https://www.googleapis.com/drive/v3/files?q=${q}&fields=nextPageToken,files(id,name,mimeType,createdTime)&pageSize=1000&key=${encodeURIComponent(cfg.key)}${tok?'&pageToken='+encodeURIComponent(tok):''}`,{signal:AbortSignal.timeout?AbortSignal.timeout(20000):undefined});
       const j=await r.json();if(j.error)throw new Error(j.error.message);
       all=all.concat(j.files||[]);tok=j.nextPageToken||''}while(tok);
     lrc={};all.forEach(f=>{if(/\.lrc$/i.test(f.name))lrc[norm(f.name.replace(/\.lrc$/i,'').replace(/_/g,' '))]=f.id});st.set('lrc',lrc);
@@ -383,9 +383,9 @@ function render(){
       saveCsv(tr,'favoritas_youtube.csv');$('#msg').textContent=tr.length+' links gerados. O ficheiro abre no Excel, Numbers ou Folhas de cálculo.'}}
   else if(view==='search'){h.textContent='Pesquisar';
     c.innerHTML='<input class="q" id="q" type="search" placeholder="Músicas, artistas" autocomplete="off"><div id="res"></div>';
-    $('#q').oninput=e=>{const t=e.target.value.toLowerCase();shown=songs.filter(s=>(s.title+' '+s.artist).toLowerCase().includes(t));$('#res').innerHTML=t?list(shown):''}}
+    $('#q').oninput=e=>{const t=norm(e.target.value),ws=t.split(' ');shown=songs.filter(s=>{const h=' '+norm(s.title+' '+s.artist+' '+(s.album||''));return ws.every(w=>h.includes(' '+w))});$('#res').innerHTML=t?list(shown):''}}
   else if(view==='set'){h.textContent='Google Drive';
-    c.innerHTML=`<div class="form"><small>1. Cria uma chave de API (Google Cloud Console, com a Drive API ativa).<br>2. Coloca as músicas numa pasta e partilha-a como «Qualquer pessoa com a ligação».<br>3. Cola abaixo a chave e a ligação da pasta.</small>
+    c.innerHTML=`<div class="form"><small>1. Cria uma chave de API (Google Cloud Console, com a Drive API ativa). Restringe-a ao site <b>sense01.github.io/*</b> e só à Drive API.<br>2. Coloca as músicas numa pasta e partilha-a como «Qualquer pessoa com a ligação».<br>3. Cola abaixo a chave e a ligação da pasta.</small>
     <label>Chave de API</label><input class="q" id="k" value="${esc(cfg.key)}" autocomplete="off" style="margin:0">
     <label>Ligação ou ID da pasta</label><input class="q" id="f" value="${esc(cfg.folder)}" autocomplete="off" style="margin:0">
     <button class="btn" id="sv">Guardar e sincronizar</button>
@@ -396,7 +396,7 @@ function render(){
     <label style="margin-top:22px">Ou adiciona uma música avulsa (ligação do ficheiro)</label>
     <input class="q" id="ml" placeholder="https://drive.google.com/file/d/…" style="margin:0"><input class="q" id="mname" placeholder="Artista - Título" style="margin:0">
     <button class="btn alt" id="ad">Adicionar música</button><div id="msg">${esc(msg)}</div>
-    ${manual.length?'<button class="btn alt" id="cl">Remover músicas avulsas</button>':''}<small style="margin-top:18px">Versão 21 · capas (Deezer, iTunes, MusicBrainz)</small></div>`;
+    ${manual.length?'<button class="btn alt" id="cl">Remover músicas avulsas</button>':''}<small style="margin-top:18px">Versão 22 · capas (Deezer, iTunes, MusicBrainz)</small></div>`;
     updCovStat();
     $('#ct').onclick=async()=>{const o=$('#ctr'),L=[];o.textContent='A testar…';
       const x=cur||songs[0];if(!x){o.textContent='Sem músicas na biblioteca.';return}
@@ -442,12 +442,12 @@ function parseList(raw){
 function matchList(tr){
   const idx=songs.map(s=>({s,h:norm((s.fn||'')+' '+s.artist+' '+s.title)}));
   const ok=[],miss=[];
-  for(const t of tr){const nt=norm(t.title),na=(t.artist||'').split(/,|&|\bfeat\b|\bx\b/i).map(norm).filter(x=>x.length>2);
+  for(const t of tr){const nt=norm(t.title),na=artistParts({artist:t.artist||''}).map(norm).filter(x=>x.length>2);
     let best=null,bs=0;
     for(const {s,h} of idx){if(!nt||!h.includes(nt))continue;const sc=na.some(a=>h.includes(a))?3:2;if(sc>bs){bs=sc;best=s}}
     if(best&&(bs===3||nt.length>=6))ok.push(best);else miss.push(t)}
   return{ok,miss}}
-const ytUrl=t=>'https://www.youtube.com/results?search_query='+encodeURIComponent(((t.artist||'').split(/,|&|\bfeat\b/i)[0].trim()+' '+t.title).trim()).replace(/%20/g,'+');
+const ytUrl=t=>'https://www.youtube.com/results?search_query='+encodeURIComponent((mainArtist({artist:t.artist||''})+' '+t.title).trim()).replace(/%20/g,'+');
 function saveCsv(rows,name){const q=v=>'"'+String(v||'').replace(/"/g,'""')+'"';
   const body=['Título,Artista,Link YouTube (pesquisa)',...rows.map(t=>[q(t.title),q(t.artist),q(ytUrl(t))].join(','))].join('\r\n');
   const a=document.createElement('a');a.href=URL.createObjectURL(new Blob(['\ufeff'+body],{type:'text/csv;charset=utf-8'}));a.download=name;
@@ -496,8 +496,12 @@ function restore(){const l=st.get('last',null);if(!l||cur||!songs.length)return;
   tagOne(x).then(()=>coverOne(x)).then(()=>{if(cur===x){ui();media()}}).catch(()=>{})}
 setInterval(saveLast,5000);au.addEventListener('pause',saveLast);document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden')saveLast()});
 const ck=x=>x.album?x.artist+'|'+x.album:'id:'+x.id;
-const cov=x=>covUrl[ck(x)],hc=x=>cov(x)?' hasart':'';
+const safeUrl=u=>typeof u==='string'&&/^(https:\/\/|blob:)[^\s'"()\\<>]+$/.test(u)?u:'';  // sem aspas/parênteses: não pode sair do atributo style
+const cov=x=>safeUrl(covUrl[ck(x)]),hc=x=>cov(x)?' hasart':'';
 const artCss=x=>cov(x)?`url('${cov(x)}') center/cover`:bg(x.title);
+function adoptKey(x){const o='id:'+x.id,k=ck(x);if(k===o||covers[o]===undefined)return;
+  if(covers[k]===undefined&&covers[o]&&covers[o]!=='idb'){covers[k]=covers[o];covUrl[k]=covUrl[o];paint(k)}
+  if(covers[o]==='idb')idb.del(o).catch(()=>{});delete covers[o];delete covUrl[o];saveCovers()}
 function applyMeta(x){const m=meta[x.id];if(!m)return;if(m.t)x.title=m.t;if(m.a)x.artist=m.a;if(m.l)x.album=m.l;if(m.du)x.du=m.du;if(m.k)x.k=m.k}
 let sv1=0,sv2=0;
 const saveMeta=()=>{clearTimeout(sv1);sv1=setTimeout(()=>st.set('meta',meta),1500)},saveCovers=()=>{clearTimeout(sv2);sv2=setTimeout(()=>st.set('covers',covers),1500)};
@@ -538,7 +542,7 @@ async function readTag2(x,ctl){const r=await fetch(url(x),{signal:ctl.signal});i
   const rd=r.body.getReader(),ch=[];let n=0,need=10;
   for(;;){const {done,value}=await rd.read();if(done)break;ch.push(value);n+=value.length;
     if(need===10&&n>=10){const h=new Uint8Array(10);let k=0;for(const c of ch){for(let i=0;i<c.length&&k<10;i++)h[k++]=c[i]}
-      if(h[0]!==73||h[1]!==68||h[2]!==51)break;need=Math.min(10+ss4(h,6),2500000)}
+      if(h[0]!==73||h[1]!==68||h[2]!==51)break;need=Math.min(10+ss4(h,6),524288)}
     if(need>10&&n>=need)break}
   ctl.abort();const u=new Uint8Array(n);let o=0;for(const c of ch){u.set(c,o);o+=c.length}
   return id3(u)}
@@ -552,7 +556,7 @@ async function tagOne(x){
   try{await tagRead(x)}finally{tagging.delete(x.id)}}
 async function tagRead(x){
   let r=null;try{r=await readTag(x)}catch(e){delete meta[x.id];bad.add(x.id);return}
-  if(r){const m={};if(r.t)m.t=r.t;if(r.a)m.a=r.a;if(r.l)m.l=r.l;if(+r.n>0)m.du=Math.round(+r.n/1000);const k=parseInt(r.k);if(k>0)m.k=k;meta[x.id]=m;applyMeta(x);
+  if(r){const m={};if(r.t)m.t=r.t;if(r.a)m.a=r.a;if(r.l)m.l=r.l;if(+r.n>0)m.du=Math.round(+r.n/1000);const k=parseInt(r.k);if(k>0)m.k=k;meta[x.id]=m;applyMeta(x);adoptKey(x);
     if(r.img){const key=ck(x);if(!covUrl[key]){try{const dd=await thumb(r.img);covers[key]='idb';storeCover(key,dataToBlob(dd),dd);paint(key)}catch(e){}}}}
   saveMeta()}
 let tagRun=false;
@@ -563,7 +567,7 @@ async function loadTags(){
       if(n%10===0){build();refresh()}}}
   finally{tagRun=false;if(n){build();refresh()}loadCovers()}}
 
-// ---- Capas online (iTunes Search API) ----
+// ---- Capas online (Deezer, iTunes, MusicBrainz) ----
 const tagging=new Set(),covErr=new Set();
 const tagsDone=x=>cfg.tags===false||!cfg.key||manual.some(y=>y.id===x.id)||bad.has(x.id)||(meta[x.id]!==undefined&&!tagging.has(x.id));
 const big=u=>u?u.replace(/\/\d+x\d+(bb)?\.(jpg|png|webp)$/i,'/600x600bb.jpg'):'';
@@ -581,9 +585,9 @@ function jsonp(u){return new Promise((res,rej)=>{const cb='itcb'+Date.now().toSt
 async function itunes(p){
   const u='https://itunes.apple.com/search?'+new URLSearchParams({media:'music',limit:'10',country:(navigator.language||'').split('-')[1]||'PT',...p});
   try{const r=await fetch(u);if(r.ok){const j=await r.json();return j.results||[]}}catch(e){}
-  try{const j=await jsonp(u);return j.results||[]}catch(e){return null}}
+  return null}
 // Resultados normalizados: {a:artista, t:título, l:álbum, img:capa grande, th:miniatura, src, chk}
-const srcStat={Deezer:'?',iTunes:'?',MusicBrainz:'?'},srcFail={Deezer:0,iTunes:0,MusicBrainz:0};
+const srcFail={Deezer:0,iTunes:0,MusicBrainz:0};
 async function srcDeezer(term,kind){
   try{const d=await jsonp('https://api.deezer.com/search'+(kind==='album'?'/album':'')+'?'+new URLSearchParams({q:term,limit:'10',output:'jsonp'}));
     if(d&&d.error)throw 0;
@@ -603,11 +607,11 @@ const SOURCES=[['Deezer',srcDeezer],['iTunes',srcITunes],['MusicBrainz',srcMB]];
 async function askSrc(name,fn,term,kind,ar,ti){
   if(srcFail[name]>=3&&Math.random()>.1)return null;  // fonte em baixo: tenta só de vez em quando
   const r=await fn(term,kind,ar,ti);
-  if(r==null){srcFail[name]++;srcStat[name]='falhou';return null}
-  srcFail[name]=0;srcStat[name]='ok';return r.map(o=>({...o,src:name}))}
+  if(r==null){srcFail[name]++;return null}
+  srcFail[name]=0;return r.map(o=>({...o,src:name}))}
 function pickArt(res,x,alb,all){
   const a=artistParts(x).length>0,t=norm(clean(alb?x.album:x.title)),ok=[];
-  for(const r of res){if(!r.img)continue;const ra=norm(r.a),rt=norm(clean(alb?r.l:r.t));
+  for(const r of res){if(!safeUrl(r.img))continue;const ra=norm(r.a),rt=norm(clean(alb?r.l:r.t));
     let sc=0;if(a&&ra&&sameArtist(x,ra))sc+=2;if(sameTitle(t,rt))sc+=1;
     if(sc>=(a?3:1))ok.push(r)}
   return all?ok:ok[0]||null}
@@ -618,7 +622,7 @@ async function findArt(x,alb){
   for(const [name,fn] of SOURCES){const res=await askSrc(name,fn,term,alb?'album':'song',ar,ti);if(res==null)continue;any=true;
     for(const r of pickArt(res,x,alb,true).slice(0,3)){if(!r.chk||await imgOk(r.img))return r.img}}
   return any?'':null}
-function paint(key){const u=covUrl[key];
+function paint(key){const u=safeUrl(covUrl[key]);
   if(!u){refresh();if(cur&&ck(cur)===key){ui();media()}return}
   $$('[data-ck]').forEach(e=>{if(e.dataset.ck===key){e.style.background=`url('${u}') center/cover`;e.classList.add('hasart')}});
   if(cur&&ck(cur)===key){ui();media()}}
@@ -643,15 +647,15 @@ async function loadCovers(){
       await new Promise(r=>setTimeout(r,1500))}}
   finally{covRun=false}}
 async function pickCover(x){
-  toast('A procurar capas…');const ar=mainArtist(x),ti=clean(x.title),term=(ar+' '+ti).trim(),L=[];
+  toast('A procurar capas…');const ar=mainArtist(x),ti=clean(x.title),term=(ar+' '+ti).trim();
   const jobs=[askSrc('Deezer',srcDeezer,term,'song',ar,ti),askSrc('iTunes',srcITunes,term,'song',ar,ti)];
   if(x.album){const at=clean(x.album);jobs.push(askSrc('Deezer',srcDeezer,(ar+' '+at).trim(),'album',ar,at))}
   let rs=await Promise.all(jobs);
   if(!rs.some(r=>r&&r.length)){const m=await askSrc('MusicBrainz',srcMB,term,'song',ar,ti);rs.push(m)}
   if(rs.every(r=>r==null))return toast('Não foi possível ligar a nenhum serviço de capas');
-  const seen=new Set(),opts=rs.flat().filter(r=>{if(!r||!r.img||seen.has(r.img))return false;seen.add(r.img);return true}).slice(0,12);
-  const set=u=>{const key=ck(x);if(covers[key]==='idb')idb.del(key).catch(()=>{});covers[key]=u;if(u)covUrl[key]=u;else delete covUrl[key];covErr.delete(key);saveCovers();paint(key);toast(u?'Capa atualizada':'Capa removida')};
-  menu('Capa de «'+x.title+'»',[...opts.map(r=>({t:(r.l||r.t||'')+' — '+(r.a||'')+' · '+r.src,img:r.th||r.img,fn:()=>set(r.img)})),
+  const seen=new Set(),opts=rs.flat().filter(r=>{if(!r||!safeUrl(r.img)||seen.has(r.img))return false;seen.add(r.img);return true}).slice(0,12);
+  const set=async(u,chk)=>{if(u&&chk&&!(await imgOk(u)))return toast('Essa capa já não existe. Escolhe outra.');const key=ck(x);if(covers[key]==='idb')idb.del(key).catch(()=>{});covers[key]=u;if(u)covUrl[key]=u;else delete covUrl[key];covErr.delete(key);saveCovers();paint(key);toast(u?'Capa atualizada':'Capa removida')};
+  menu('Capa de «'+x.title+'»',[...opts.map(r=>({t:(r.l||r.t||'')+' — '+(r.a||'')+' · '+r.src,img:r.th||r.img,fn:()=>set(r.img,r.chk)})),
     ...(opts.length?[]:[{t:'Nenhuma capa encontrada'}]),...(cov(x)?[{t:'Remover capa',fn:()=>set('')}]:[])])}
 function parseLrc(t){const out=[];let timed=false;
   for(const raw of t.replace(/\r/g,'').split('\n')){const m=[...raw.matchAll(/\[(\d{1,3}):(\d{2})(?:[.:](\d{1,3}))?\]/g)],tx=raw.replace(/\[[^\]]*\]/g,'').trim();
@@ -660,7 +664,7 @@ function parseLrc(t){const out=[];let timed=false;
   return timed?out.filter(l=>l.t!=null).sort((p,q)=>p.t-q.t):out}
 async function lrclib(x){
   const q=o=>Object.entries(o).filter(e=>e[1]).map(e=>e[0]+'='+encodeURIComponent(e[1])).join('&'),pick=r=>r&&(r.syncedLyrics||r.plainLyrics)||null,
-    ar=x.artist==='Google Drive'?'':x.artist.split(/,|&/)[0].trim();
+    ar=mainArtist(x);
   try{
     if(ar){const r=await fetch('https://lrclib.net/api/get?'+q({artist_name:ar,track_name:x.title,album_name:x.album,duration:x.du}));if(r.ok){const t=pick(await r.json());if(t)return t}}
     const r=await fetch('https://lrclib.net/api/search?'+q({track_name:x.title,artist_name:ar}));
@@ -727,7 +731,9 @@ function media(){if(!('mediaSession'in navigator)||!cur)return;
 
 au.onplay=au.onpause=ui;
 au.onended=()=>{if(sleepEnd){sleepEnd=false;toast('Temporizador: música terminada');return}if(repeat===1){au.currentTime=0;au.play()}else nav(1)};
-au.onerror=()=>{if(cur){$('#tA').textContent='Não foi possível reproduzir. Verifica a partilha e a chave.'}};
+let playErr=0;au.addEventListener('playing',()=>{playErr=0});
+au.onerror=()=>{if(!cur)return;$('#tA').textContent='Não foi possível reproduzir. Verifica a partilha e a chave.';
+  if(++playErr<=3&&queue.length>1){toast('Não foi possível tocar «'+cur.title+'» · a passar à seguinte');setTimeout(()=>nav(1),800)}else toast('Não foi possível reproduzir. Verifica a partilha do Drive e a chave.')};
 function tick(){const d=au.duration,t=au.currentTime,p=d?t/d:0;lyTick();
   ['#seek','#tSeek'].forEach(i=>{const k=$(i);if(!k.dataset.d){k.value=p*1000;k.style.setProperty('--p',p*100+'%')}});
   $('#cur').textContent=$('#tCur').textContent=fmt(t);$('#dur').textContent=fmt(d);$('#tDur').textContent=d?'-'+fmt(d-t):'-0:00';
@@ -741,7 +747,8 @@ function skip(dt){if(au.duration)au.currentTime=Math.max(0,Math.min(au.duration,
   k.onchange=()=>{if(au.duration)au.currentTime=k.value/1000*au.duration;delete k.dataset.d};
   k.onpointerup=()=>k.blur()});
 function setVol(v){au.volume=v;['#vol','#vol2'].forEach(i=>{$(i).value=v;$(i).style.setProperty('--p',v*100+'%')})}
-$('#vol').oninput=e=>setVol(+e.target.value);$('#vol2').oninput=e=>setVol(+e.target.value);setVol(.8);
+$('#vol').oninput=e=>setVol(+e.target.value);$('#vol2').oninput=e=>setVol(+e.target.value);
+au.volume=.5;if(au.volume!==.5)$$('.vol').forEach(e=>e.style.display='none');setVol(.8);  // o iOS ignora o volume das páginas
 
 document.addEventListener('click',e=>{
   const v=e.target.closest('[data-v]');if(v){view=v.dataset.v;arg=v.dataset.g||'';render();$('#main').scrollTop=0;return}
@@ -763,8 +770,8 @@ sh.addEventListener('touchmove',e=>{if(ty==null)return;const dy=e.touches[0].cli
 sh.addEventListener('touchend',e=>{if(ty==null)return;const dy=e.changedTouches[0].clientY-ty,v=dy/Math.max(1,Date.now()-t0);
   if(dragging&&(dy>110||(dy>40&&v>.5)))shut();else reset();ty=null;dragging=false});
 sh.addEventListener('touchcancel',reset);
-document.addEventListener('keydown',e=>{if(e.key==='Escape')shut()});
-document.addEventListener('keydown',e=>{if((e.key==='ArrowRight'||e.key==='ArrowLeft')&&!/INPUT|TEXTAREA|SELECT/.test(e.target.tagName)){e.preventDefault();skip(e.key==='ArrowRight'?10:-10)}
+document.addEventListener('keydown',e=>{if(e.key==='Escape')shut();
+  if((e.key==='ArrowRight'||e.key==='ArrowLeft')&&!/INPUT|TEXTAREA|SELECT/.test(e.target.tagName)){e.preventDefault();skip(e.key==='ArrowRight'?10:-10)}
   if(e.key==='Enter'&&e.target.classList.contains('row'))playRow(+e.target.dataset.i);
   if(e.code==='Space'&&!/INPUT|TEXTAREA|SELECT|BUTTON/.test(e.target.tagName)){e.preventDefault();toggle()}});
 $$('#shuf,#shuf2').forEach(b=>b.onclick=()=>{shuffle=!shuffle;
@@ -777,10 +784,10 @@ if('serviceWorker'in navigator)addEventListener('load',()=>navigator.serviceWork
 Object.keys(covers).forEach(k=>{const v=covers[k];if(!v)return;
   if(v==='idb'){idb.get(k).then(b=>{if(covers[k]!=='idb')return;if(b){covUrl[k]=URL.createObjectURL(b);paint(k)}else{delete covers[k];saveCovers()}}).catch(()=>{});return}
   if(/^data:/.test(v)){try{storeCover(k,dataToBlob(v),v)}catch(e){}return}  // migra capas antigas do localStorage
-  covUrl[k]=v});
+  if(safeUrl(v))covUrl[k]=v;else delete covers[k]});
 drive=drive.map(x=>parseName(x.id,x.fn||x.title,x.d));manual=manual.map(x=>parseName(x.id,x.fn||x.title,x.d));
 if(st.get('covVer',0)<3){Object.keys(covers).forEach(k=>{if(!covers[k])delete covers[k]});st.set('covers',covers);st.set('covVer',3)}  // repete as pesquisas que falharam com o artista errado
-build();render();ui();restore();loadTags();loadCovers();
+build();songs.forEach(adoptKey);render();ui();restore();loadTags();loadCovers();
 if(cfg.key&&cfg.folder)sync(drive.length>0);
 setInterval(()=>{if(document.visibilityState==='visible')sync(true)},60000);
 document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&Date.now()-lastSync>15000)sync(true)});
