@@ -392,12 +392,24 @@ function render(){
     <label style="margin-top:14px;display:flex;gap:8px;align-items:center;color:var(--tx)"><input type="checkbox" id="tg" ${cfg.tags!==false?'checked':''}> Ler capas, álbuns e duração dos ficheiros (usa dados)</label>
     <label style="margin-top:8px;display:flex;gap:8px;align-items:center;color:var(--tx)"><input type="checkbox" id="lo" ${cfg.online!==false?'checked':''}> Procurar letras online (envia artista e título ao lrclib.net)</label>
     <label style="margin-top:8px;display:flex;gap:8px;align-items:center;color:var(--tx)"><input type="checkbox" id="cv" ${cfg.covers!==false?'checked':''}> Procurar capas online quando o ficheiro não tem (envia artista e título ao iTunes da Apple)</label>
-    <button class="btn alt" id="rc" style="justify-self:start">Voltar a procurar capas em falta</button><small id="cvs"></small>
+    <button class="btn alt" id="rc" style="justify-self:start">Voltar a procurar capas em falta</button><small id="cvs"></small><button class="btn alt" id="ct" style="justify-self:start">Testar pesquisa de capas</button><small id="ctr" style="white-space:pre-wrap"></small>
     <label style="margin-top:22px">Ou adiciona uma música avulsa (ligação do ficheiro)</label>
     <input class="q" id="ml" placeholder="https://drive.google.com/file/d/…" style="margin:0"><input class="q" id="mname" placeholder="Artista - Título" style="margin:0">
     <button class="btn alt" id="ad">Adicionar música</button><div id="msg">${esc(msg)}</div>
-    ${manual.length?'<button class="btn alt" id="cl">Remover músicas avulsas</button>':''}<small style="margin-top:18px">Versão 18 · capas automáticas</small></div>`;
-    updCovStat();$('#cv').onchange=e=>{cfg.covers=e.target.checked;st.set('cfg',cfg);if(cfg.covers)loadCovers()};
+    ${manual.length?'<button class="btn alt" id="cl">Remover músicas avulsas</button>':''}<small style="margin-top:18px">Versão 19 · capas automáticas</small></div>`;
+    updCovStat();
+    $('#ct').onclick=async()=>{const o=$('#ctr'),L=[];o.textContent='A testar…';
+      const x=cur||songs[0];if(!x){o.textContent='Sem músicas na biblioteca.';return}
+      const ar=mainArtist(x),alb=!!x.album,term=(ar+' '+clean(alb?x.album:x.title)).trim();
+      L.push('Música: '+x.title+' — '+x.artist+(alb?' · álbum: '+x.album:''),'Pesquisa: «'+term+'» ('+(alb?'álbum':'música')+')','Estado guardado: '+(covers[ck(x)]===undefined?'ainda não procurada':covers[ck(x)]===''?'sem resultado':'tem capa'));
+      const u='https://itunes.apple.com/search?'+new URLSearchParams({media:'music',limit:'10',country:(navigator.language||'').split('-')[1]||'PT',term,entity:alb?'album':'song'});
+      try{const r=await fetch(u);L.push('Ligação direta: HTTP '+r.status+(r.ok?' · '+((await r.json()).resultCount)+' resultados':''))}catch(e){L.push('Ligação direta falhou: '+e)}
+      try{const j=await jsonp(u);L.push('Ligação alternativa: '+j.resultCount+' resultados');const pk=pickArt(j.results||[],x,alb);
+        L.push(pk?'Capa escolhida ✓':'Nenhum resultado coincide. Primeiros: '+(j.results||[]).slice(0,3).map(r=>r.artistName+' – '+(alb?r.collectionName:r.trackName)).join(' | '));
+        if(pk&&!cov(x)){const k=ck(x);covers[k]=pk;covUrl[k]=pk;saveCovers();paint(k)}}catch(e){L.push('Ligação alternativa falhou')}
+      L.push('Leitura de etiquetas: '+(cfg.tags===false?'desligada':Object.keys(meta).length+' lidas · '+tagging.size+' em curso'),'Pesquisa automática: '+(cfg.covers===false?'desligada':covRun?'a correr':'parada'));
+      o.textContent=L.join('\n');updCovStat();loadCovers()};
+    $('#cv').onchange=e=>{cfg.covers=e.target.checked;st.set('cfg',cfg);if(cfg.covers)loadCovers()};
     $('#rc').onclick=()=>{let n=0;Object.keys(covers).forEach(k=>{if(!covers[k]){delete covers[k];n++}});covErr.clear();saveCovers();toast(n?'A procurar '+n+' capas em falta…':'A procurar capas…');loadCovers()};
     $('#lo').onchange=e=>{cfg.online=e.target.checked;st.set('cfg',cfg)};
     $('#tg').onchange=e=>{cfg.tags=e.target.checked;st.set('cfg',cfg);if(cfg.tags)loadTags()};
@@ -520,7 +532,8 @@ function id3(u){
   }
   return r}
 async function readTag(x){
-  const ctl=new AbortController(),r=await fetch(url(x),{signal:ctl.signal});if(!r.ok)throw 0;
+  const ctl=new AbortController(),to=setTimeout(()=>ctl.abort(),20000);try{return await readTag2(x,ctl)}finally{clearTimeout(to)}}
+async function readTag2(x,ctl){const r=await fetch(url(x),{signal:ctl.signal});if(!r.ok)throw 0;
   const rd=r.body.getReader(),ch=[];let n=0,need=10;
   for(;;){const {done,value}=await rd.read();if(done)break;ch.push(value);n+=value.length;
     if(need===10&&n>=10){const h=new Uint8Array(10);let k=0;for(const c of ch){for(let i=0;i<c.length&&k<10;i++)h[k++]=c[i]}
@@ -589,7 +602,7 @@ function updCovStat(){const e=$('#cvs');if(e){const v=Object.values(covers);e.te
 async function loadCovers(){
   if(covRun||cfg.covers===false)return;covRun=true;
   try{for(;;){if(cfg.covers===false)break;
-      const x=covOrder().find(y=>covers[ck(y)]===undefined&&!covErr.has(ck(y))&&tagsDone(y));if(!x)break;
+      const ord=covOrder().filter(y=>covers[ck(y)]===undefined&&!covErr.has(ck(y))&&!tagging.has(y.id)),x=ord.find(tagsDone)||ord[0];if(!x)break;
       const r=await coverOne(x).catch(()=>{covErr.add(ck(x));return 'ok'});
       if(r==='err'){if(++covFails>=5){covFails=0;break}await new Promise(r=>setTimeout(r,30000));continue}covFails=0;
       updCovStat();
