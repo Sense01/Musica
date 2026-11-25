@@ -393,10 +393,11 @@ function render(){
     <label style="margin-top:8px;display:flex;gap:8px;align-items:center;color:var(--tx)"><input type="checkbox" id="lo" ${cfg.online!==false?'checked':''}> Procurar letras online (envia artista e título ao lrclib.net)</label>
     <label style="margin-top:8px;display:flex;gap:8px;align-items:center;color:var(--tx)"><input type="checkbox" id="cv" ${cfg.covers!==false?'checked':''}> Procurar capas online quando o ficheiro não tem (envia artista e título ao Deezer, iTunes e MusicBrainz)</label>
     <button class="btn alt" id="rc" style="justify-self:start">Voltar a procurar capas em falta</button><small id="cvs"></small><button class="btn alt" id="ct" style="justify-self:start">Testar pesquisa de capas</button><small id="ctr" style="white-space:pre-wrap"></small>
+    <label style="margin-top:14px">Registo de falhas de reprodução</label><small id="plog" style="white-space:pre-wrap">${esc(plogs.join('\n'))||'Sem falhas registadas.'}</small>
     <label style="margin-top:22px">Ou adiciona uma música avulsa (ligação do ficheiro)</label>
     <input class="q" id="ml" placeholder="https://drive.google.com/file/d/…" style="margin:0"><input class="q" id="mname" placeholder="Artista - Título" style="margin:0">
     <button class="btn alt" id="ad">Adicionar música</button><div id="msg">${esc(msg)}</div>
-    ${manual.length?'<button class="btn alt" id="cl">Remover músicas avulsas</button>':''}<small style="margin-top:18px">Versão 22 · capas (Deezer, iTunes, MusicBrainz)</small></div>`;
+    ${manual.length?'<button class="btn alt" id="cl">Remover músicas avulsas</button>':''}<small style="margin-top:18px">Versão 23 · capas (Deezer, iTunes, MusicBrainz)</small></div>`;
     updCovStat();
     $('#ct').onclick=async()=>{const o=$('#ctr'),L=[];o.textContent='A testar…';
       const x=cur||songs[0];if(!x){o.textContent='Sem músicas na biblioteca.';return}
@@ -483,7 +484,7 @@ function songMenu(x){const it=[{t:'Tocar a seguir',fn:()=>enq(x,true)},{t:'Adici
   it.push({t:'Escolher capa…',fn:()=>pickCover(x)});
   it.push({t:'Transferir',fn:()=>dl(x)});menu(x.title,it)}
 function sleepMenu(){const set=m=>{clearTimeout(sleepT);sleepEnd=false;
-    if(m>0){sleepT=setTimeout(()=>{au.pause();toast('Temporizador terminou')},m*60000);toast('Pausa daqui a '+m+' min')}
+    if(m>0){sleepT=setTimeout(()=>{wantPlay=false;au.pause();toast('Temporizador terminou')},m*60000);toast('Pausa daqui a '+m+' min')}
     else if(m<0){sleepEnd=true;toast('Pausa no fim da música')}else toast('Temporizador desligado')};
   menu('Temporizador de sono',[15,30,45,60].map(m=>({t:m+' minutos',fn:()=>set(m)})).concat([{t:'No fim da música',fn:()=>set(-1)},{t:'Desligar',fn:()=>set(0)}]))}
 function speedMenu(){menu('Velocidade de reprodução',[.75,1,1.25,1.5,2].map(v=>({t:v+'×'+(au.playbackRate===v?'  ✓':''),fn:()=>{au.defaultPlaybackRate=v;au.playbackRate=v;toast('Velocidade '+v+'×')}})))}
@@ -562,8 +563,9 @@ async function tagRead(x){
 let tagRun=false;
 async function loadTags(){
   if(tagRun||cfg.tags===false||!cfg.key)return;tagRun=true;let n=0;
-  try{for(;;){if(cfg.tags===false||!cfg.key)break;const todo=songs.filter(x=>meta[x.id]===undefined&&!bad.has(x.id)&&!manual.some(y=>y.id===x.id)).slice(0,2);if(!todo.length)break;
-      await Promise.all(todo.map(x=>tagOne(x).catch(()=>{})));n+=todo.length;
+  try{for(;;){if(cfg.tags===false||!cfg.key)break;const todo=songs.filter(x=>meta[x.id]===undefined&&!bad.has(x.id)&&!manual.some(y=>y.id===x.id)).slice(0,1);if(!todo.length)break;
+      while(wantPlay&&au.readyState<3&&!au.error)await new Promise(r=>setTimeout(r,1000));  // dá prioridade ao áudio
+      await Promise.all(todo.map(x=>tagOne(x).catch(()=>{})));n+=todo.length;await new Promise(r=>setTimeout(r,1000));
       if(n%10===0){build();refresh()}}}
   finally{tagRun=false;if(n){build();refresh()}loadCovers()}}
 
@@ -706,13 +708,18 @@ function play(i,from){
   const arr=shown.length?shown:songs;if(!arr.length)return;
   base=arr.slice();queue=arr.slice();if(shuffle){const c=arr[i];queue=mix(arr.filter((_,k)=>k!==i));queue.unshift(c);qi=0}else qi=i;
   load()}
-function load(){cur=queue[qi];if(view==='lyrics')setTimeout(loadLyrics,0);{const x=cur;tagOne(x).then(()=>coverOne(x)).then(()=>{if(cur===x){ui();media()}}).catch(()=>{})}hist=[cur.id,...hist.filter(i=>i!==cur.id)].slice(0,30);st.set('hist',hist);au.src=url(cur);au.play().catch(()=>{});ui();media()}
+function load(){cur=queue[qi];if(view==='lyrics')setTimeout(loadLyrics,0);{const x=cur;au.addEventListener('playing',()=>{if(cur===x)tagOne(x).then(()=>coverOne(x)).then(()=>{if(cur===x){ui();media()}}).catch(()=>{})},{once:true})}hist=[cur.id,...hist.filter(i=>i!==cur.id)].slice(0,30);st.set('hist',hist);
+  const tok=++loadTok;retried=false;au.src=url(cur);tryPlay();ui();media();
+  setTimeout(()=>{if(tok===loadTok&&wantPlay&&au.currentTime<.5&&au.readyState<3)playFail('a música não arrancou ao fim de 20 s')},20000)}
+let loadTok=0,retried=false,wantPlay=false;
+function tryPlay(){wantPlay=true;au.play().catch(e=>{if(e&&e.name==='AbortError')return;plog('O sistema recusou tocar ('+(e&&e.name||'erro')+')');
+  if(e&&e.name==='NotAllowedError'){wantPlay=false;ui();toast('O iPhone pausou a reprodução. Carrega em ▶ para continuar.')}})}
 let homeA=[],homeB=[];
 function playRow(i){if(!(i>=0))return;if(view==='home'){i<homeA.length?play(i,homeA):play(i-homeA.length,homeB);return}if(view==='queue'){if(qi+1+i<queue.length){qi=qi+1+i;load()}return}play(i)}
 function nav(d){if(!queue.length)return;let n=qi+d;
-  if(n>=queue.length){if(repeat===2)n=0;else return au.pause()}
+  if(n>=queue.length){if(repeat===2)n=0;else{wantPlay=false;return au.pause()}}
   if(n<0)n=0;qi=n;load()}
-function toggle(){if(!cur){if(songs.length){shown=songs;play(0)}return}au.paused?au.play():au.pause()}
+function toggle(){if(!cur){if(songs.length){shown=songs;play(0)}return}if(au.paused){if(au.error||au.readyState===0){retried=false;au.src=url(cur)}tryPlay()}else{wantPlay=false;au.pause()}}
 let tt;function toast(t){const e=$('#toast');e.textContent=t;e.classList.add('on');clearTimeout(tt);tt=setTimeout(()=>e.classList.remove('on'),2200)}
 async function dl(s){if(!s)return toast('Escolhe primeiro uma música');
   toast('A transferir «'+s.title+'»…');
@@ -723,17 +730,28 @@ async function dl(s){if(!s)return toast('Escolhe primeiro uma música');
   catch{menu('Não foi possível transferir aqui',[{t:'Abrir no Google Drive',fn:()=>window.open('https://drive.google.com/uc?export=download&id='+encodeURIComponent(s.id),'_blank')},{t:'Cancelar'}])}}
 function media(){if(!('mediaSession'in navigator)||!cur)return;
   navigator.mediaSession.metadata=new MediaMetadata({title:cur.title,artist:cur.artist,album:cur.album||'',artwork:cov(cur)?[{src:cov(cur),sizes:/^https:/.test(cov(cur))?'600x600':'128x128',type:'image/jpeg'}]:[]});
-  navigator.mediaSession.setActionHandler('play',()=>au.play());navigator.mediaSession.setActionHandler('pause',()=>au.pause());
+  navigator.mediaSession.setActionHandler('play',()=>tryPlay());navigator.mediaSession.setActionHandler('pause',()=>{wantPlay=false;au.pause()});
   navigator.mediaSession.setActionHandler('nexttrack',()=>nav(1));navigator.mediaSession.setActionHandler('previoustrack',()=>nav(-1));
   const h=(n,f)=>{try{navigator.mediaSession.setActionHandler(n,f)}catch{}};
   h('seekbackward',d=>skip(-(d.seekOffset||10)));h('seekforward',d=>skip(d.seekOffset||10));
   h('seekto',d=>{if(au.duration&&d.seekTime!=null)au.currentTime=d.seekTime})}
 
 au.onplay=au.onpause=ui;
-au.onended=()=>{if(sleepEnd){sleepEnd=false;toast('Temporizador: música terminada');return}if(repeat===1){au.currentTime=0;au.play()}else nav(1)};
+au.onended=()=>{if(sleepEnd){sleepEnd=false;wantPlay=false;toast('Temporizador: música terminada');return}if(repeat===1){au.currentTime=0;tryPlay()}else nav(1)};
 let playErr=0;au.addEventListener('playing',()=>{playErr=0});
-au.onerror=()=>{if(!cur)return;$('#tA').textContent='Não foi possível reproduzir. Verifica a partilha e a chave.';
-  if(++playErr<=3&&queue.length>1){toast('Não foi possível tocar «'+cur.title+'» · a passar à seguinte');setTimeout(()=>nav(1),800)}else toast('Não foi possível reproduzir. Verifica a partilha do Drive e a chave.')};
+// Registo das últimas falhas de reprodução (visível em Drive), para saber a causa real
+const plogs=st.get('plog',[]);
+function plog(t){plogs.unshift(new Date().toLocaleString('pt-PT')+' · '+(cur?cur.title+' · ':'')+t);plogs.length=Math.min(plogs.length,15);st.set('plog',plogs);const e=$('#plog');if(e)e.textContent=plogs.join('\n')}
+async function driveWhy(x){try{const r=await fetch(url(x),{headers:{Range:'bytes=0-1'},signal:AbortSignal.timeout?AbortSignal.timeout(10000):undefined});
+  if(r.ok)return 'o Drive responde (HTTP '+r.status+')';let m='';try{const j=await r.json();m=j.error&&(j.error.message||j.error.status)||''}catch{}return 'Drive: HTTP '+r.status+(m?' · '+m:'')}
+  catch(e){return 'sem ligação ao Drive ('+(e&&e.message||e)+')'}}
+async function playFail(why){if(!cur)return;const x=cur,tok=loadTok,code=au.error?' · código '+au.error.code:'';
+  const d=await driveWhy(x);if(tok!==loadTok)return;plog(why+code+' · '+d);
+  if(!retried){retried=true;setTimeout(()=>{if(tok===loadTok){au.src=url(x);tryPlay()}},1500);return}  // uma nova tentativa da mesma música
+  $('#tA').textContent='Não foi possível reproduzir: '+d;
+  if(++playErr<=3&&queue.length>1){toast('Não foi possível tocar «'+x.title+'» · a passar à seguinte');setTimeout(()=>{if(tok===loadTok)nav(1)},800)}
+  else{wantPlay=false;toast('Parei: várias músicas seguidas falharam. Vê o registo em Drive.')}}
+au.onerror=()=>playFail('erro do leitor');
 function tick(){const d=au.duration,t=au.currentTime,p=d?t/d:0;lyTick();
   ['#seek','#tSeek'].forEach(i=>{const k=$(i);if(!k.dataset.d){k.value=p*1000;k.style.setProperty('--p',p*100+'%')}});
   $('#cur').textContent=$('#tCur').textContent=fmt(t);$('#dur').textContent=fmt(d);$('#tDur').textContent=d?'-'+fmt(d-t):'-0:00';

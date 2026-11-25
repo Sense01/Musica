@@ -79,12 +79,15 @@ test('pesquisa ignora acentos',()=>{
 
 });
 
-test('um ficheiro com erro passa à música seguinte',async()=>{
+test('um ficheiro com erro: tenta outra vez, depois passa à seguinte e regista a causa',async()=>{
   const w=boot({store:{drive3:[1,2,3].map(i=>({id:'id00000000000000'+i,fn:'A - S'+i,d:''}))}});
   w.eval("go('lib')");w.document.querySelectorAll('.row')[0].click();
-  w.document.querySelector('#au').dispatchEvent(new w.Event('error'));
-  await wait(100);
-  assert.equal(w.eval('cur.title'),'S2');
+  const au=w.document.querySelector('#au');
+  au.dispatchEvent(new w.Event('error'));await wait(150);
+  assert.equal(w.eval('cur.title'),'S1');  // 1.º erro: tenta a mesma música outra vez
+  au.dispatchEvent(new w.Event('error'));await wait(150);
+  assert.equal(w.eval('cur.title'),'S2');  // 2.º erro: passa à seguinte
+  assert.match(w.localStorage.getItem('plog'),/S1/);  // a falha fica registada
 
 });
 
@@ -100,4 +103,13 @@ test('capas automáticas: se o iTunes falha (como no iPhone), o Deezer resolve',
   assert.equal(covers['id:fileid000000000000'],'https://dz/yummy.jpg');
   assert.equal(covers['id:fileid000000000001'],'https://dz/pos.jpg');
 
+});
+
+test('a fila toca seguida: 6 músicas, cada uma acaba e a seguinte começa',async()=>{
+  const w=boot({store:{drive3:[1,2,3,4,5,6].map(i=>({id:'id00000000000000'+i,fn:'A - S'+i,d:''}))}});
+  w.eval("go('lib')");w.document.querySelectorAll('.row')[0].click();
+  const au=w.document.querySelector('#au'),seen=[w.eval('cur.title')];
+  for(let k=0;k<5;k++){au.dispatchEvent(new w.Event('ended'));await wait(20);seen.push(w.eval('cur.title'))}
+  assert.deepEqual(seen,['S1','S2','S3','S4','S5','S6']);
+  assert.equal(w.eval('wantPlay'),true);
 });
