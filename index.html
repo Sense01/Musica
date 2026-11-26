@@ -98,6 +98,7 @@ select.q{appearance:auto;width:auto;display:inline-block;margin:0 0 12px 8px;pad
 .ib{font-size:20px;color:var(--tx2);padding:6px}.ib:hover{color:var(--ac)}
 #toast{position:fixed;left:50%;bottom:calc(130px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--tx);color:var(--bg);padding:9px 16px;border-radius:20px;font-size:13px;opacity:0;pointer-events:none;transition:opacity .25s;z-index:20;max-width:90%}
 #toast.on{opacity:1}
+.al{cursor:pointer;border-radius:3px}.al:hover,.al:focus-visible{text-decoration:underline;outline:0}
 #mini,#tabs,#sheet{display:none}
 @media(max-width:860px){
 #app{grid-template-columns:1fr;grid-template-rows:1fr;grid-template-areas:"main"}
@@ -435,7 +436,7 @@ function render(){
     <label style="margin-top:22px">Ou adiciona uma música avulsa (ligação do ficheiro)</label>
     <input class="q" id="ml" placeholder="https://drive.google.com/file/d/…" style="margin:0"><input class="q" id="mname" placeholder="Artista - Título" style="margin:0">
     <button class="btn alt" id="ad">Adicionar música</button><div id="msg">${esc(msg)}</div>
-    ${manual.length?'<button class="btn alt" id="cl">Remover músicas avulsas</button>':''}<small style="margin-top:18px">Versão 24 · páginas de artista (Deezer, iTunes, MusicBrainz)</small></div>`;
+    ${manual.length?'<button class="btn alt" id="cl">Remover músicas avulsas</button>':''}<small style="margin-top:18px">Versão 25 · artista clicável no leitor (Deezer, iTunes, MusicBrainz)</small></div>`;
     updCovStat();
     $('#ct').onclick=async()=>{const o=$('#ctr'),L=[];o.textContent='A testar…';
       const x=cur||songs[0];if(!x){o.textContent='Sem músicas na biblioteca.';return}
@@ -727,10 +728,23 @@ async function loadLyrics(){const x=cur,ly=$('#ly');if(!ly)return;lyLines=[];lyI
 function lyTick(){if(view!=='lyrics'||!lyLines.length||lyLines[0].t==null)return;
   const t=au.currentTime+.25;let i=-1;for(let k=0;k<lyLines.length;k++){if(lyLines[k].t<=t)i=k;else break}
   if(i===lyIdx)return;lyIdx=i;$$('#ly .ln').forEach((p,k)=>p.classList.toggle('on',k===i));const e=$('#ly .ln.on');if(e)e.scrollIntoView({block:'center',behavior:'smooth'})}
+// Nome(s) do artista no leitor, cada um clicável para abrir a sua página
+function artistHtml(x){const raw=x.artist==='Google Drive'?'':x.artist,low=raw.toLowerCase(),hits=[],rest=[];
+  const link=n=>'<span class="al" data-art="'+esc(n)+'" role="link" tabindex="0">';
+  for(const n of credits(x)){if(n==='Sem artista')continue;const i=low.indexOf(n.toLowerCase());
+    if(i>=0&&!hits.some(h=>i<h.i+h.n.length&&h.i<i+n.length))hits.push({i,n});else if(i<0)rest.push(n)}
+  hits.sort((a,b)=>a.i-b.i);let out='',o=0;
+  for(const h of hits){out+=esc(raw.slice(o,h.i))+link(h.n)+esc(raw.slice(h.i,h.i+h.n.length))+'</span>';o=h.i+h.n.length}
+  out+=esc(raw.slice(o));
+  if(rest.length)out+=(out?' · ':'')+'com '+rest.map(n=>link(n)+esc(n)+'</span>').join(', ');
+  return out||esc(x.artist==='Google Drive'?'':x.artist)}
 function setArt(el,s){el.style.background=s?artCss(s):'var(--bg2)';el.classList.toggle('hasart',!!(s&&cov(s)))}
 function ui(){
   const s=cur;
-  ['t','m','s'].forEach(p=>{const T=$('#'+p+'T'),A=$('#'+p+'A');T.textContent=s?s.title:'Sem música';A.textContent=s?(p==='s'&&s.album?s.artist+' — '+s.album:s.artist):(p==='t'?'Liga o Google Drive em Definições':'')});
+  ['t','m','s'].forEach(p=>{const T=$('#'+p+'T'),A=$('#'+p+'A');T.textContent=s?s.title:'Sem música';
+    if(!s)A.textContent=p==='t'?'Liga o Google Drive em Definições':'';
+    else if(p==='m')A.textContent=s.artist;  // no mini-leitor, tocar abre o leitor completo
+    else A.innerHTML=artistHtml(s)+(p==='s'&&s.album?' — '+esc(s.album):'')});
   ['tArt','mArt','sArt'].forEach(i=>setArt($('#'+i),s));
   const icon=au.paused?'#i-play':'#i-pause';$$('.pp').forEach(u=>u.setAttribute('href',icon));
   $$('#shuf,#shuf2').forEach(b=>b.classList.toggle('on',shuffle));
@@ -807,6 +821,7 @@ $('#vol').oninput=e=>setVol(+e.target.value);$('#vol2').oninput=e=>setVol(+e.tar
 au.volume=.5;if(au.volume!==.5)$$('.vol').forEach(e=>e.style.display='none');setVol(.8);  // o iOS ignora o volume das páginas
 
 document.addEventListener('click',e=>{
+  const al=e.target.closest('[data-art]');if(al){e.stopPropagation();shut();go('artist',al.dataset.art);return}
   const v=e.target.closest('[data-v]');if(v){if(v.dataset.v!==view)prevV=view;view=v.dataset.v;arg=v.dataset.g||'';render();$('#main').scrollTop=0;return}
   const a=e.target.closest('[data-a]');if(a){e.stopPropagation();const x=a.dataset.a;x==='play'?toggle():nav(x==='next'?1:-1);return}
   const ln=e.target.closest('.ln');if(ln&&ln.dataset.t!==''&&au.duration){au.currentTime=+ln.dataset.t;return}
@@ -828,6 +843,7 @@ sh.addEventListener('touchend',e=>{if(ty==null)return;const dy=e.changedTouches[
   if(dragging&&(dy>110||(dy>40&&v>.5)))shut();else reset();ty=null;dragging=false});
 sh.addEventListener('touchcancel',reset);
 document.addEventListener('keydown',e=>{if(e.key==='Escape')shut();
+  if(e.key==='Enter'&&e.target.dataset&&e.target.dataset.art){shut();go('artist',e.target.dataset.art);return}
   if((e.key==='ArrowRight'||e.key==='ArrowLeft')&&!/INPUT|TEXTAREA|SELECT/.test(e.target.tagName)){e.preventDefault();skip(e.key==='ArrowRight'?10:-10)}
   if(e.key==='Enter'&&e.target.classList.contains('row'))playRow(+e.target.dataset.i);
   if(e.code==='Space'&&!/INPUT|TEXTAREA|SELECT|BUTTON/.test(e.target.tagName)){e.preventDefault();toggle()}});

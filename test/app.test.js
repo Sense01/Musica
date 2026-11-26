@@ -147,3 +147,20 @@ test('pesquisa: mostra artistas e filtra os resultados por cantor',()=>{
   assert.ok(only.length===2&&only.length<all);
   assert.ok(only.every(t=>/Raye/.test(t)));
 });
+
+test('leitor: tocar no nome do artista abre a página dele',()=>{
+  const w=boot({store:{drive3:LIB}});
+  w.eval("go('artist','Simone Mendes')");
+  const row=[...w.document.querySelectorAll('#c .row')].find(r=>/P do Pecado/.test(r.textContent));row.click();
+  w.document.querySelector('#sheet').classList.add('open');
+  const links=[...w.document.querySelectorAll('#sA [data-art]')].map(e=>e.dataset.art);
+  assert.deepEqual(links,['Grupo Menos É Mais','Simone Mendes']);
+  assert.equal(w.document.querySelector('#sA').textContent,'Grupo Menos É Mais, Simone Mendes');  // o texto não muda
+  w.document.querySelector('#sA [data-art="Grupo Menos É Mais"]').click();
+  assert.equal(w.eval('view'),'artist');
+  assert.equal(w.document.querySelector('#h').textContent,'Grupo Menos É Mais');
+  assert.ok(!w.document.querySelector('#sheet').classList.contains('open'));  // o leitor fecha
+  // participação no título aparece como «com …»
+  w.eval("play(songs.findIndex(s=>/Manto/.test(s.title)),songs)");
+  assert.match(w.document.querySelector('#sA').textContent,/Agir · com Ana Moura/);
+});
