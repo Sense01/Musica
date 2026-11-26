@@ -22,7 +22,7 @@ function boot({store={},deezer=()=>[],fetch}={}){
     const ap=w.HTMLHeadElement.prototype.appendChild;
     w.HTMLHeadElement.prototype.appendChild=function(el){
       if(el.tagName==='SCRIPT'&&el.src){const u=new URL(el.src),cb=u.searchParams.get('callback');
-        if(u.host==='api.deezer.com')setTimeout(()=>w[cb]&&w[cb]({data:deezer(u.searchParams.get('q'))}),1);
+        if(u.host==='api.deezer.com')setTimeout(()=>w[cb]&&w[cb]({data:deezer(u.searchParams.get('q'),u.pathname)}),1);
         else setTimeout(()=>el.onerror&&el.onerror(),1);
         return el}
       return ap.call(this,el)};
@@ -163,4 +163,23 @@ test('leitor: tocar no nome do artista abre a página dele',()=>{
   // participação no título aparece como «com …»
   w.eval("play(songs.findIndex(s=>/Manto/.test(s.title)),songs)");
   assert.match(w.document.querySelector('#sA').textContent,/Agir · com Ana Moura/);
+});
+
+test('fotos dos artistas: vêm do Deezer; sem foto, usa a capa de uma música',async()=>{
+  const w=boot({store:{drive3:LIB,covers:{'id:id000000000000006':'https://dz/desfado.jpg'}},
+    deezer:(q,p)=>!/artist/.test(p)?[]:q==='Simone Mendes'?[{name:'Simone Mendes',picture_big:'https://dz/simone.jpg'}]
+      :q==='Ana Moura'?[{name:'Ana Moura',picture_big:'https://cdn/images/artist//500x500.jpg'}]  // o Deezer não tem foto
+      :q==='Raye'?[{name:'RAYE',picture_big:"https://dz/r.jpg' onerror='x"}]:[]});              // endereço inseguro
+  w.eval("go('artists')");
+  await wait(600);
+  const ap=JSON.parse(w.localStorage.getItem('apics')||'{}');
+  assert.equal(ap['simone mendes'],'https://dz/simone.jpg');
+  assert.equal(ap['ana moura'],'');
+  assert.equal(ap['raye'],'');
+  const bgOf=k=>w.document.querySelector('[data-ak="'+k+'"]').getAttribute('style');
+  assert.ok(w.document.querySelector('[data-ak="simone mendes"]').classList.contains('hasart'));
+  w.eval("render()");
+  assert.match(bgOf('simone mendes'),/dz\/simone\.jpg/);
+  assert.match(bgOf('ana moura'),/dz\/desfado\.jpg/);  // capa de uma música dela
+  assert.ok(!/onerror/.test(w.document.querySelector('#c').innerHTML));
 });
