@@ -304,7 +304,29 @@ function parseName(id,n,d){let p=n.replace(/^\s*\d{1,4}\s*[.)]\s+/,'').split(' -
   return{id,d:d||'',fn:n,title:(t||n).trim(),artist:(p.length>1?p[0]:'Google Drive').trim()}}
 const url=s=>cfg.key?`https://www.googleapis.com/drive/v3/files/${s.id}?alt=media&key=${encodeURIComponent(cfg.key)}`:`https://drive.google.com/uc?export=download&id=${s.id}`;
 const fid=s=>{s=s.trim();let m=s.match(/\/d\/([\w-]{15,})/)||s.match(/folders\/([\w-]{15,})/)||s.match(/[?&]id=([\w-]{15,})/);return m?m[1]:s};
-function build(){songs=[...drive,...manual];songs.forEach(applyMeta);songs.sort((a,b)=>a.title.localeCompare(b.title,'pt'))}
+function build(){songs=[...drive,...manual];songs.forEach(applyMeta);songs.sort((a,b)=>a.title.localeCompare(b.title,'pt'));buildArtists()}
+// ---- Artistas: cada música entra na página de todos os artistas que tem, incluindo participações no título
+let artIdx=new Map(),songCred=new Map();
+const credClean=t=>t.replace(/[#@]\S+/g,' ').replace(/\s+/g,' ').trim();
+// separadores fortes: vírgula, «feat.», «ft.», «x», «;», «/»
+const credAtoms=a=>credClean(a||'').split(/\s*[,;\/]\s*|\s+x\s+|\s+(?:feat|ft|featuring)\.?\s+/i).map(t=>t.trim()).filter(t=>norm(t).length>1);
+// participações no título: «(feat. Ana Moura)», «(part. Simone)», «(com X)», «- ft. Y»
+function featAtoms(t){const m=String(t||'').match(/[\(\[]\s*(?:feat\.?|ft\.?|featuring|part\.?|participa[çc][ãa]o|com|with)\s+([^\)\]]+)[\)\]]/i)||String(t||'').match(/\s(?:feat\.?|ft\.?|featuring)\s+(.+)$/i);return m?credAtoms(m[1]):[]}
+function buildArtists(){
+  const atoms=new Map();  // música -> nomes, antes de partir «A & B» / «A e B»
+  for(const x of songs)atoms.set(x.id,x.artist==='Google Drive'?featAtoms(x.title):[...credAtoms(x.artist),...featAtoms(x.title)]);
+  const known=new Set();for(const l of atoms.values())for(const a of l)known.add(norm(a));
+  // «A & B» só é partido se A ou B também aparecer sozinho na biblioteca (assim «Felipe & Rodrigo» fica junto, «Raye & Rudimental» separa-se se houver músicas só da Raye)
+  const split=a=>{const p=a.split(/\s+(?:&|e|and)\s+/i).map(t=>t.trim()).filter(t=>norm(t).length>1);return p.length>1&&p.some(t=>known.has(norm(t)))?p:[a]};
+  artIdx=new Map();songCred=new Map();
+  for(const x of songs){const names=[],seen=new Set();
+    for(const a of atoms.get(x.id).flatMap(split)){const k=norm(a);if(k&&!seen.has(k)){seen.add(k);names.push(a)}}
+    if(!names.length&&x.artist==='Google Drive')names.push('Sem artista');
+    songCred.set(x.id,names);
+    for(const n of names){const k=norm(n);let e=artIdx.get(k);if(!e)artIdx.set(k,e={name:n,songs:[]});e.songs.push(x)}}}
+const credits=x=>songCred.get(x.id)||[];
+const artistRow=e=>`<button class="row" data-v="artist" data-g="${esc(e.name)}"><div class="art" style="background:${bg(e.name)}"><svg><use href="#i-note"/></svg></div><div class="meta"><b>${esc(e.name)}</b><span>${e.songs.length} ${e.songs.length===1?'música':'músicas'}</span></div></button>`;
+let srchQ='',srchArt='',prevV='';
 
 let lastSync=0,busy=false;
 const sig=a=>a.map(x=>x.id+(x.fn||x.title)).sort().join('|');
@@ -340,7 +362,6 @@ let shown=[];
 function render(){
   $$('[data-v]').forEach(b=>b.classList.toggle('on',b.dataset.v===view&&b.classList.contains('nav')||b.dataset.v===view&&b.closest('#tabs')));
   const h=$('#h'),c=$('#c');
-  const ak=x=>x.artist==='Google Drive'?'Sem artista':x.artist;
   const chips=()=>'<div class="chips">'+[['lib','Músicas'],['artists','Artistas'],['albums','Álbuns'],['pls','Playlists'],['queue','Fila']].map(([v,t])=>`<button class="chip${view===v?' on':''}" data-v="${v}">${t}</button>`).join('')+'</div>';
   const card=(x,i)=>`<button class="card" data-i="${i}"><div class="art${hc(x)}" data-ck="${esc(ck(x))}" style="background:${artCss(x)}"><svg width="40" height="40"><use href="#i-note"/></svg></div><b>${esc(x.title)}</b><span>${esc(x.artist)}</span></button>`;
   if(view==='home'){h.textContent='Ouvir agora';
@@ -356,10 +377,15 @@ function render(){
     c.innerHTML=chips()+(ks.length?'<div class="grid">'+ks.map(k=>{const x=g.get(k)[0];return`<button class="card" data-v="album" data-g="${esc(k)}"><div class="art${hc(x)}" data-ck="${esc(k)}" style="background:${artCss(x)}"><svg width="40" height="40"><use href="#i-note"/></svg></div><b>${esc(x.album)}</b><span>${esc(x.artist)} · ${g.get(k).length}</span></button>`}).join('')+'</div>':'<div class="empty">Ainda não há álbuns.<br>As etiquetas dos ficheiros estão a ser lidas (precisa da chave de API e de alguns minutos).</div>')}
   else if(view==='album'){shown=songs.filter(x=>x.album&&ck(x)===arg).sort((p,q)=>(p.k||999)-(q.k||999)||p.title.localeCompare(q.title,'pt'));
     h.textContent=shown[0]?shown[0].album:'Álbum';c.innerHTML='<button class="btn" id="pa" style="margin:0 0 12px">Tocar álbum</button>'+list(shown);$('#pa').onclick=()=>shown.length&&play(0)}
-  else if(view==='artists'){h.textContent='Artistas';const g=new Map();songs.forEach(x=>{const k=ak(x);g.set(k,(g.get(k)||0)+1)});
-    const n=[...g.keys()].sort((p,q)=>p.localeCompare(q,'pt'));
-    c.innerHTML=chips()+(n.length?n.map(k=>`<button class="row" data-v="artist" data-g="${esc(k)}"><div class="art" style="background:${bg(k)}"><svg><use href="#i-note"/></svg></div><div class="meta"><b>${esc(k)}</b><span>${g.get(k)} músicas</span></div></button>`).join(''):empty())}
-  else if(view==='artist'){h.textContent=arg;shown=songs.filter(x=>ak(x)===arg);c.innerHTML='<button class="btn" id="pa" style="margin:0 0 12px">Tocar tudo</button>'+list(shown);$('#pa').onclick=()=>shown.length&&play(0)}
+  else if(view==='artists'){h.textContent='Artistas';const n=[...artIdx.values()].sort((p,q)=>p.name.localeCompare(q.name,'pt'));
+    c.innerHTML=chips()+(n.length?n.map(artistRow).join(''):empty())}
+  else if(view==='artist'){const e=artIdx.get(norm(arg));h.textContent=e?e.name:arg;shown=e?e.songs.slice():[];
+    const solo=shown.filter(x=>norm(credits(x)[0]||'')===norm(arg)).length;
+    const bk={search:'‹ Pesquisa',artists:'‹ Artistas'}[prevV]||(prevV&&prevV!=='artist'?'‹ Voltar':'');
+    c.innerHTML=(bk?'<button class="chip" data-v="'+prevV+'" style="margin:-8px 0 12px">'+bk+'</button>':'')+'<div style="color:var(--tx2);font-size:14px;margin:-10px 0 14px">'+shown.length+(shown.length===1?' música':' músicas')+(shown.length>solo?' · '+(shown.length-solo)+' em colaboração':'')+'</div>'
+      +'<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px"><button class="btn" id="pa" style="margin:0">Tocar tudo</button><button class="btn alt" id="ps" style="margin:0">Aleatório</button></div>'+list(shown);
+    $('#pa').onclick=()=>{if(shown.length){shuffle=false;play(0)}};
+    $('#ps').onclick=()=>{if(shown.length){shuffle=true;play(Math.floor(Math.random()*shown.length))}}}
   else if(view==='pls'){h.textContent='Playlists';
     c.innerHTML=chips()+'<button class="btn" id="np" style="margin:0 0 12px">Nova playlist</button>'+(pls.length?pls.map(x=>`<button class="row" data-v="pl" data-g="${x.id}"><div class="art" style="background:${bg(x.name)}"><svg><use href="#i-lib"/></svg></div><div class="meta"><b>${esc(x.name)}</b><span>${x.ids.length} músicas</span></div></button>`).join(''):'<div class="empty">Ainda não tens playlists.<br>Abre o menu ⋯ de uma música para a adicionar.</div>');
     $('#np').onclick=()=>{if(newPl())render()}}
@@ -383,7 +409,19 @@ function render(){
       saveCsv(tr,'favoritas_youtube.csv');$('#msg').textContent=tr.length+' links gerados. O ficheiro abre no Excel, Numbers ou Folhas de cálculo.'}}
   else if(view==='search'){h.textContent='Pesquisar';
     c.innerHTML='<input class="q" id="q" type="search" placeholder="Músicas, artistas" autocomplete="off"><div id="res"></div>';
-    $('#q').oninput=e=>{const t=norm(e.target.value),ws=t.split(' ');shown=songs.filter(s=>{const h=' '+norm(s.title+' '+s.artist+' '+(s.album||''));return ws.every(w=>h.includes(' '+w))});$('#res').innerHTML=t?list(shown):''}}
+    const q=$('#q');q.value=srchQ;
+    q.oninput=e=>{if(e.isTrusted||srchQ!==q.value){if(srchQ!==q.value)srchArt='';srchQ=q.value}const t=norm(srchQ),ws=t.split(' '),has=h=>ws.every(w=>(' '+h).includes(' '+w));
+      if(!t){shown=[];$('#res').innerHTML='';return}
+      const arts=[...artIdx.entries()].filter(([k])=>has(k)).sort((p,q)=>q[1].songs.length-p[1].songs.length).slice(0,6).map(e=>e[1]);
+      const hits=songs.filter(s=>has(norm(s.title+' '+credits(s).join(' ')+' '+s.artist+' '+(s.album||''))));
+      const cnt=new Map();for(const s of hits)for(const n of credits(s)){const k=norm(n);cnt.set(k,(cnt.get(k)||0)+1)}
+      const top=[...cnt.entries()].sort((p,q)=>q[1]-p[1]).slice(0,8).map(([k,n])=>({k,n,name:artIdx.get(k).name}));
+      if(srchArt&&!cnt.has(srchArt))srchArt='';
+      shown=srchArt?hits.filter(s=>credits(s).some(n=>norm(n)===srchArt)):hits;
+      $('#res').innerHTML=(arts.length?'<h2 style="margin-top:4px">Artistas</h2>'+arts.map(artistRow).join(''):'')
+        +'<h2>Músicas</h2>'+(top.length>1?'<div class="chips"><button class="chip'+(srchArt?'':' on')+'" data-sa="">Todos · '+hits.length+'</button>'+top.map(a=>'<button class="chip'+(srchArt===a.k?' on':'')+'" data-sa="'+esc(a.k)+'">'+esc(a.name)+' · '+a.n+'</button>').join('')+'</div>':'')
+        +list(shown)};
+    if(srchQ)q.oninput({});else q.focus()}
   else if(view==='set'){h.textContent='Google Drive';
     c.innerHTML=`<div class="form"><small>1. Cria uma chave de API (Google Cloud Console, com a Drive API ativa). Restringe-a ao site <b>sense01.github.io/*</b> e só à Drive API.<br>2. Coloca as músicas numa pasta e partilha-a como «Qualquer pessoa com a ligação».<br>3. Cola abaixo a chave e a ligação da pasta.</small>
     <label>Chave de API</label><input class="q" id="k" value="${esc(cfg.key)}" autocomplete="off" style="margin:0">
@@ -397,7 +435,7 @@ function render(){
     <label style="margin-top:22px">Ou adiciona uma música avulsa (ligação do ficheiro)</label>
     <input class="q" id="ml" placeholder="https://drive.google.com/file/d/…" style="margin:0"><input class="q" id="mname" placeholder="Artista - Título" style="margin:0">
     <button class="btn alt" id="ad">Adicionar música</button><div id="msg">${esc(msg)}</div>
-    ${manual.length?'<button class="btn alt" id="cl">Remover músicas avulsas</button>':''}<small style="margin-top:18px">Versão 23 · capas (Deezer, iTunes, MusicBrainz)</small></div>`;
+    ${manual.length?'<button class="btn alt" id="cl">Remover músicas avulsas</button>':''}<small style="margin-top:18px">Versão 24 · páginas de artista (Deezer, iTunes, MusicBrainz)</small></div>`;
     updCovStat();
     $('#ct').onclick=async()=>{const o=$('#ctr'),L=[];o.textContent='A testar…';
       const x=cur||songs[0];if(!x){o.textContent='Sem músicas na biblioteca.';return}
@@ -461,7 +499,7 @@ function doImport(raw){
   m.textContent=ok.length+' de '+tr.length+' músicas encontradas no Drive e marcadas como favoritas.';
   $('#irep').innerHTML=miss.length?'<h2>Não encontradas ('+miss.length+')</h2><small style="color:var(--tx2)">Carrega estes ficheiros para o Drive e volta a importar.</small>'+miss.map(t=>'<div class="row"><div class="meta"><b>'+esc(t.title)+'</b><span>'+esc(t.artist||'')+'</span></div></div>').join('')+'<button class="btn alt" id="ym" style="margin-top:12px">Links do YouTube das não encontradas</button>':'';
   const ym=$('#ym');if(ym)ym.onclick=()=>saveCsv(miss,'nao_encontradas_youtube.csv')}
-function go(v,a){view=v;arg=a||'';render();$('#main').scrollTop=0}
+function go(v,a){if(v!==view)prevV=view;view=v;arg=a||'';render();$('#main').scrollTop=0}
 const savePl=()=>st.set('pls',pls);
 const sorted=a=>{const x=[...a],k=y=>y.artist==='Google Drive'?'Sem artista':y.artist;
   if(sortBy==='artista')x.sort((p,q)=>k(p).localeCompare(k(q),'pt')||p.title.localeCompare(q.title,'pt'));
@@ -479,7 +517,7 @@ function plMenu(x){const add=p=>{if(!p)return;if(!p.ids.includes(x.id))p.ids.pus
   menu('Adicionar à playlist',[...pls.map(p=>({t:p.name,fn:()=>add(p)})),{t:'Nova playlist…',fn:()=>add(newPl())}])}
 function songMenu(x){const it=[{t:'Tocar a seguir',fn:()=>enq(x,true)},{t:'Adicionar à fila',fn:()=>enq(x,false)},{t:'Adicionar à playlist…',fn:()=>plMenu(x)},
   {t:favs.has(x.id)?'Remover das favoritas':'Adicionar às favoritas',fn:()=>{favs.has(x.id)?favs.delete(x.id):favs.add(x.id);st.set('favs',[...favs]);if(view==='fav')shown=songs.filter(y=>favs.has(y.id));refresh()}}];
-  if(x.artist!=='Google Drive')it.push({t:'Ver '+x.artist,fn:()=>go('artist',x.artist)});
+  credits(x).filter(n=>n!=='Sem artista').forEach(n=>it.push({t:'Ver '+n,fn:()=>go('artist',n)}));
   if(view==='pl')it.push({t:'Remover desta playlist',fn:()=>{const p=pls.find(y=>y.id===arg);p.ids=p.ids.filter(i=>i!==x.id);savePl();render()}});
   it.push({t:'Escolher capa…',fn:()=>pickCover(x)});
   it.push({t:'Transferir',fn:()=>dl(x)});menu(x.title,it)}
@@ -769,12 +807,13 @@ $('#vol').oninput=e=>setVol(+e.target.value);$('#vol2').oninput=e=>setVol(+e.tar
 au.volume=.5;if(au.volume!==.5)$$('.vol').forEach(e=>e.style.display='none');setVol(.8);  // o iOS ignora o volume das páginas
 
 document.addEventListener('click',e=>{
-  const v=e.target.closest('[data-v]');if(v){view=v.dataset.v;arg=v.dataset.g||'';render();$('#main').scrollTop=0;return}
+  const v=e.target.closest('[data-v]');if(v){if(v.dataset.v!==view)prevV=view;view=v.dataset.v;arg=v.dataset.g||'';render();$('#main').scrollTop=0;return}
   const a=e.target.closest('[data-a]');if(a){e.stopPropagation();const x=a.dataset.a;x==='play'?toggle():nav(x==='next'?1:-1);return}
   const ln=e.target.closest('.ln');if(ln&&ln.dataset.t!==''&&au.duration){au.currentTime=+ln.dataset.t;return}
   if(e.target.closest('[data-more]')){moreMenu();return}
   const mm=e.target.closest('[data-m]');if(mm){e.stopPropagation();const x=songs.find(y=>y.id===mm.dataset.m);if(x)songMenu(x);return}
   const d=e.target.closest('[data-d]');if(d){e.stopPropagation();const id=d.dataset.d||(cur&&cur.id);dl(songs.find(x=>x.id===id));return}
+  const sa=e.target.closest('[data-sa]');if(sa){srchArt=sa.dataset.sa;$('#q').oninput({});return}
   const f=e.target.closest('[data-f]');if(f){const id=f.dataset.f;favs.has(id)?favs.delete(id):favs.add(id);st.set('favs',[...favs]);if(view==='fav')shown=songs.filter(s=>favs.has(s.id));f.classList.toggle('on');if(view==='fav')render();return}
   const r=e.target.closest('[data-i]');if(r){playRow(+r.dataset.i);return}
   if(e.target.closest('#mini'))$('#sheet').classList.add('open')});

@@ -113,3 +113,37 @@ test('a fila toca seguida: 6 músicas, cada uma acaba e a seguinte começa',asyn
   assert.deepEqual(seen,['S1','S2','S3','S4','S5','S6']);
   assert.equal(w.eval('wantPlay'),true);
 });
+
+const LIB=['Raye & Rudimental - Regardless (Official Audio)','Raye - Escapism','Felipe & Rodrigo - Pós (Ao Vivo) #NoSentimento',
+  'Grupo Menos É Mais, Simone Mendes - P do Pecado (Ao Vivo)','Simone Mendes - Erro Gostoso','Agir - Manto de Água (feat. Ana Moura)',
+  'Ana Moura - Desfado','João Gustavo e Murilo, @matogrossoemathias - Postinho De Gasolina'].map((fn,i)=>({id:'id0000000000000'+String(i).padStart(2,'0'),fn,d:''}));
+
+test('páginas de artista: juntam colaborações e participações, sem partir duplas',()=>{
+  const w=boot({store:{drive3:LIB}});
+  const n=k=>{const e=w.eval('artIdx').get(k);return e?e.songs.length:0};
+  assert.equal(n('raye'),2);                 // «Raye & Rudimental» separa-se porque há músicas só da Raye
+  assert.equal(n('rudimental'),1);
+  assert.equal(n('simone mendes'),2);        // a solo + em colaboração com vírgula
+  assert.equal(n('ana moura'),2);            // a solo + «(feat. Ana Moura)» no título
+  assert.equal(n('felipe rodrigo'),1);       // dupla: fica junta
+  assert.equal(n('felipe'),0);
+  assert.equal(n('joao gustavo e murilo'),1);
+  assert.ok(![...w.eval('artIdx').keys()].some(k=>k.includes('matogrosso')));  // «@…» não é artista
+  w.eval("go('artist','Ana Moura')");
+  assert.equal(w.document.querySelectorAll('#c .row').length,2);
+});
+
+test('pesquisa: mostra artistas e filtra os resultados por cantor',()=>{
+  const w=boot({store:{drive3:LIB}});
+  w.eval("go('search')");
+  const q=w.document.querySelector('#q');q.value='moura';q.dispatchEvent(new w.Event('input'));
+  const res=w.document.querySelector('#res');
+  assert.match(res.textContent,/Ana Moura/);
+  assert.equal(res.querySelectorAll('[data-v="artist"]').length,1);
+  q.value='r';q.dispatchEvent(new w.Event('input'));
+  const all=res.querySelectorAll('.row[data-i]').length;
+  res.querySelector('[data-sa="raye"]').click();
+  const only=[...res.querySelectorAll('.row[data-i] .meta span')].map(e=>e.textContent);
+  assert.ok(only.length===2&&only.length<all);
+  assert.ok(only.every(t=>/Raye/.test(t)));
+});
