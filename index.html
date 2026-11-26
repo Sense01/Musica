@@ -460,7 +460,7 @@ function render(){
     <button class="btn alt" id="ad">Adicionar música</button><div id="msg">${esc(msg)}</div>
     ${manual.length?'<button class="btn alt" id="cl">Remover músicas avulsas</button>':''}
     <label style="margin-top:22px">Downloads de referência</label><small>Copia o prompt para pedir ao Claude que descarregue as músicas de uma lista Excel com o yt-dlp. Depois de colar, troca [NOME_DO_FICHEIRO] e [NOME_DA_SUBPASTA].</small>
-    <button class="btn alt" id="cp" style="justify-self:start">Copiar prompt de downloads (yt-dlp)</button><small style="margin-top:18px">Versão 27 · prompt de downloads</small></div>`;
+    <button class="btn alt" id="cp" style="justify-self:start">Prompt de Download</button><small style="margin-top:18px">Versão 27 · prompt de downloads</small></div>`;
     updCovStat();
     $('#ct').onclick=async()=>{const o=$('#ctr'),L=[];o.textContent='A testar…';
       const x=cur||songs[0];if(!x){o.textContent='Sem músicas na biblioteca.';return}
