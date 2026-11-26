@@ -169,13 +169,14 @@ test('fotos dos artistas: vêm do Deezer; sem foto, usa a capa de uma música',a
   const w=boot({store:{drive3:LIB,covers:{'id:id000000000000006':'https://dz/desfado.jpg'}},
     deezer:(q,p)=>!/artist/.test(p)?[]:q==='Simone Mendes'?[{name:'Simone Mendes',picture_big:'https://dz/simone.jpg'}]
       :q==='Ana Moura'?[{name:'Ana Moura',picture_big:'https://cdn/images/artist//500x500.jpg'}]  // o Deezer não tem foto
-      :q==='Raye'?[{name:'RAYE',picture_big:"https://dz/r.jpg' onerror='x"}]:[]});              // endereço inseguro
+      :q==='Raye'?[{name:'RAYE',picture_big:'https://dz/raye.jpg'}]:q==='Rudimental'?[{name:'Rudimental',picture_big:"https://dz/r.jpg' onerror='x"}]:[]});  // a Raye tem foto; o endereço da Rudimental é inseguro
   w.eval("go('artists')");
   await wait(600);
   const ap=JSON.parse(w.localStorage.getItem('apics')||'{}');
   assert.equal(ap['simone mendes'],'https://dz/simone.jpg');
   assert.equal(ap['ana moura'],'');
-  assert.equal(ap['raye'],'');
+  assert.equal(ap['raye'],'https://dz/raye.jpg');
+  assert.equal(ap['rudimental'],'');
   const bgOf=k=>w.document.querySelector('[data-ak="'+k+'"]').getAttribute('style');
   assert.ok(w.document.querySelector('[data-ak="simone mendes"]').classList.contains('hasart'));
   w.eval("render()");

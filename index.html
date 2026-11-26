@@ -337,10 +337,13 @@ const avatar=(e,cls)=>{const p=artPic(e);needPic(e);return`<div class="art av${c
 function needPic(e){const k=norm(e.name);if(cfg.covers===false||k==='sem artista'||apics[k]!==undefined||apQ.includes(e.name))return;apQ.push(e.name);setTimeout(runPics,0)}
 async function runPics(){if(apRun)return;apRun=true;
   try{while(apQ.length){const n=apQ.shift(),k=norm(n);if(apics[k]!==undefined)continue;
-      let d=null;try{d=await jsonp('https://api.deezer.com/search/artist?'+new URLSearchParams({q:n,limit:'5',output:'jsonp'}))}catch(e){}
-      if(!d||d.error){await new Promise(r=>setTimeout(r,3000));continue}  // sem ligação: fica para outra vez
-      const L=d.data||[],m=L.find(a=>norm(a.name)===k)||L.find(a=>{const an=norm(a.name);return an&&(an.includes(k)||k.includes(an))&&Math.abs(an.length-k.length)<=3});
-      const u=m&&[m.picture_big,m.picture_medium].find(apOk)||'';
+      // tenta o nome completo; se for «A & B» sem foto própria, usa a foto do primeiro (A)
+      let u=null;for(const q of [n,...(n.split(/\s+(?:&|e|and)\s+/i).length>1?[n.split(/\s+(?:&|e|and)\s+/i)[0]]:[])]){
+        let d=null;try{d=await jsonp('https://api.deezer.com/search/artist?'+new URLSearchParams({q,limit:'5',output:'jsonp'}))}catch(e){}
+        if(!d||d.error){u=null;break}
+        const qk=norm(q),L=d.data||[],m=L.find(a=>norm(a.name)===qk)||L.find(a=>{const an=norm(a.name);return an&&(an.includes(qk)||qk.includes(an))&&Math.abs(an.length-qk.length)<=3});
+        u=m&&[m.picture_big,m.picture_medium].find(apOk)||'';if(u)break}
+      if(u==null){await new Promise(r=>setTimeout(r,3000));continue}  // sem ligação: fica para outra vez
       apics[k]=u;saveApics();if(u)paintArtist(k);
       await new Promise(r=>setTimeout(r,250))}}
   finally{apRun=false}}
