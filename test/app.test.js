@@ -184,3 +184,13 @@ test('fotos dos artistas: vêm do Deezer; sem foto, usa a capa de uma música',a
   assert.match(bgOf('ana moura'),/dz\/desfado\.jpg/);  // capa de uma música dela
   assert.ok(!/onerror/.test(w.document.querySelector('#c').innerHTML));
 });
+
+test('definições: o botão copia o prompt de downloads exatamente',async()=>{
+  const w=boot();let copied=null;
+  Object.defineProperty(w.navigator,'clipboard',{value:{writeText:async t=>{copied=t}},configurable:true});
+  w.eval("go('set')");
+  w.document.querySelector('#cp').click();await wait(50);
+  const expected=fs.readFileSync(path.join(__dirname,'prompt-yt-dlp.txt'),'utf8').replace(/\n$/,'');
+  assert.equal(copied,expected);
+  assert.match(w.document.querySelector('#toast').textContent,/copiado/);
+});

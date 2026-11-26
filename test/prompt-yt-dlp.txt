@@ -1,0 +1,36 @@
+Olá! Quero descarregar músicas de referência para estudar ritmos, usando o yt-dlp.
+
+PASTA E FICHEIRO
+- Pasta no meu Mac: ~/Desktop/Referências Musica  (se não estiver ligada, pede-me acesso)
+- Lista de músicas: [NOME_DO_FICHEIRO].xlsx dentro dessa pasta
+- Colunas: Título | Artista | Link YouTube (opcional)
+- Guarda os MP3 numa subpasta nova: Musicas/[NOME_DA_SUBPASTA]
+
+COMO FAZER
+1. Corre tudo no shell do meu computador (device_bash). Instala o yt-dlp com
+   "pip install --user yt-dlp" se faltar. O ffmpeg já lá está.
+2. Antes de começar, pede logo autorização para apagar na pasta, para o yt-dlp
+   conseguir remover os .webm temporários depois de converter.
+3. Para cada linha: se a coluna Link tiver um link de vídeo direto (watch?v= ou youtu.be),
+   usa-o. Caso contrário, pesquisa "ytsearch1:Artista Título".
+   Prefere a versão de estúdio/áudio oficial; evita 'live', 'cover' e 'karaoke'
+   (a não ser que o próprio título do Excel diga "Ao Vivo" ou "Live").
+   Formato: MP3, melhor qualidade (-x --audio-format mp3 --audio-quality 0 --no-playlist).
+4. Nome de cada ficheiro: "NNN - Artista - Título.mp3", com NNN = número da linha.
+   Troca os caracteres proibidos \ / : * ? " < > | por "-".
+5. Corrige os caracteres estragados do Excel antes de pesquisar:
+   _x0092_ → '   _x0085_ → ...   _x009f_ → Y
+6. Se uma música já existir noutra linha, copia o MP3 em vez de descarregar.
+7. Os processos em segundo plano são parados no fim de cada comando. Por isso, corre
+   por blocos de cerca de 140 segundos, salta o que já existe e retoma onde parou.
+8. Não repitas falhas a meio: guarda-as numa lista para saltar e tenta-as outra vez
+   só no fim. Se voltarem a falhar, tenta uma pesquisa mais simples
+   (só artista principal + título, sem palavrões nem "(Original Mix)").
+9. Se um título aparecer como data (ex.: 2026-02-04 00:00:00), não adivinhes:
+   anota-o e pergunta-me.
+10. No fim: apaga os .webm/.part que ficarem (só os que já têm MP3) e escreve
+    falhados.txt na subpasta com as que faltam e o motivo.
+
+RESUMO FINAL
+Diz-me quantas músicas descarregaste do total, quais faltam e porquê, e o tamanho da pasta.
+Não precisas de narrar cada bloco.

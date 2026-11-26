@@ -458,7 +458,9 @@ function render(){
     <label style="margin-top:22px">Ou adiciona uma música avulsa (ligação do ficheiro)</label>
     <input class="q" id="ml" placeholder="https://drive.google.com/file/d/…" style="margin:0"><input class="q" id="mname" placeholder="Artista - Título" style="margin:0">
     <button class="btn alt" id="ad">Adicionar música</button><div id="msg">${esc(msg)}</div>
-    ${manual.length?'<button class="btn alt" id="cl">Remover músicas avulsas</button>':''}<small style="margin-top:18px">Versão 26 · fotos dos artistas (Deezer, iTunes, MusicBrainz)</small></div>`;
+    ${manual.length?'<button class="btn alt" id="cl">Remover músicas avulsas</button>':''}
+    <label style="margin-top:22px">Downloads de referência</label><small>Copia o prompt para pedir ao Claude que descarregue as músicas de uma lista Excel com o yt-dlp. Depois de colar, troca [NOME_DO_FICHEIRO] e [NOME_DA_SUBPASTA].</small>
+    <button class="btn alt" id="cp" style="justify-self:start">Copiar prompt de downloads (yt-dlp)</button><small style="margin-top:18px">Versão 27 · prompt de downloads (Deezer, iTunes, MusicBrainz)</small></div>`;
     updCovStat();
     $('#ct').onclick=async()=>{const o=$('#ctr'),L=[];o.textContent='A testar…';
       const x=cur||songs[0];if(!x){o.textContent='Sem músicas na biblioteca.';return}
@@ -479,7 +481,8 @@ function render(){
     $('#sv').onclick=()=>{cfg={...cfg,key:$('#k').value.trim(),folder:fid($('#f').value)};st.set('cfg',cfg);sync()};
     $('#ad').onclick=()=>{const id=fid($('#ml').value);if(id.length<15){msg='Ligação inválida.';return render()}
       manual.push(parse({id,name:$('#mname').value.trim()||'Música '+(manual.length+1)}));st.set('manual',manual);build();msg='Música adicionada.';render()};
-    if($('#cl'))$('#cl').onclick=()=>{manual=[];st.set('manual',manual);build();msg='';render()}}
+    if($('#cl'))$('#cl').onclick=()=>{manual=[];st.set('manual',manual);build();msg='';render()};
+    $('#cp').onclick=()=>copyText(YT_PROMPT).then(ok=>toast(ok?'Prompt copiado':'Não foi possível copiar'))}
 }
 
 async function readF(f){const b=await f.arrayBuffer(),u=new Uint8Array(b);
@@ -794,6 +797,11 @@ function nav(d){if(!queue.length)return;let n=qi+d;
   if(n>=queue.length){if(repeat===2)n=0;else{wantPlay=false;return au.pause()}}
   if(n<0)n=0;qi=n;load()}
 function toggle(){if(!cur){if(songs.length){shown=songs;play(0)}return}if(au.paused){if(au.error||au.readyState===0){retried=false;au.src=url(cur)}tryPlay()}else{wantPlay=false;au.pause()}}
+// Prompt para descarregar músicas de referência com o yt-dlp (botão nas definições)
+const YT_PROMPT="Olá! Quero descarregar músicas de referência para estudar ritmos, usando o yt-dlp.\n\nPASTA E FICHEIRO\n- Pasta no meu Mac: ~/Desktop/Referências Musica  (se não estiver ligada, pede-me acesso)\n- Lista de músicas: [NOME_DO_FICHEIRO].xlsx dentro dessa pasta\n- Colunas: Título | Artista | Link YouTube (opcional)\n- Guarda os MP3 numa subpasta nova: Musicas/[NOME_DA_SUBPASTA]\n\nCOMO FAZER\n1. Corre tudo no shell do meu computador (device_bash). Instala o yt-dlp com\n   \"pip install --user yt-dlp\" se faltar. O ffmpeg já lá está.\n2. Antes de começar, pede logo autorização para apagar na pasta, para o yt-dlp\n   conseguir remover os .webm temporários depois de converter.\n3. Para cada linha: se a coluna Link tiver um link de vídeo direto (watch?v= ou youtu.be),\n   usa-o. Caso contrário, pesquisa \"ytsearch1:Artista Título\".\n   Prefere a versão de estúdio/áudio oficial; evita 'live', 'cover' e 'karaoke'\n   (a não ser que o próprio título do Excel diga \"Ao Vivo\" ou \"Live\").\n   Formato: MP3, melhor qualidade (-x --audio-format mp3 --audio-quality 0 --no-playlist).\n4. Nome de cada ficheiro: \"NNN - Artista - Título.mp3\", com NNN = número da linha.\n   Troca os caracteres proibidos \\ / : * ? \" < > | por \"-\".\n5. Corrige os caracteres estragados do Excel antes de pesquisar:\n   _x0092_ → '   _x0085_ → ...   _x009f_ → Y\n6. Se uma música já existir noutra linha, copia o MP3 em vez de descarregar.\n7. Os processos em segundo plano são parados no fim de cada comando. Por isso, corre\n   por blocos de cerca de 140 segundos, salta o que já existe e retoma onde parou.\n8. Não repitas falhas a meio: guarda-as numa lista para saltar e tenta-as outra vez\n   só no fim. Se voltarem a falhar, tenta uma pesquisa mais simples\n   (só artista principal + título, sem palavrões nem \"(Original Mix)\").\n9. Se um título aparecer como data (ex.: 2026-02-04 00:00:00), não adivinhes:\n   anota-o e pergunta-me.\n10. No fim: apaga os .webm/.part que ficarem (só os que já têm MP3) e escreve\n    falhados.txt na subpasta com as que faltam e o motivo.\n\nRESUMO FINAL\nDiz-me quantas músicas descarregaste do total, quais faltam e porquê, e o tamanho da pasta.\nNão precisas de narrar cada bloco.";
+async function copyText(t){try{await navigator.clipboard.writeText(t);return true}catch(e){}
+  const a=document.createElement('textarea');a.value=t;a.setAttribute('readonly','');a.style.cssText='position:fixed;opacity:0;top:0';document.body.appendChild(a);a.select();a.setSelectionRange(0,t.length);
+  let ok=false;try{ok=document.execCommand('copy')}catch(e){}a.remove();return ok}
 let tt;function toast(t){const e=$('#toast');e.textContent=t;e.classList.add('on');clearTimeout(tt);tt=setTimeout(()=>e.classList.remove('on'),2200)}
 async function dl(s){if(!s)return toast('Escolhe primeiro uma música');
   toast('A transferir «'+s.title+'»…');
