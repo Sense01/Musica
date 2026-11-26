@@ -36,6 +36,7 @@ test('o service worker não está vazio e usa a versão da app',()=>{
   assert.match(sw,/addEventListener\('fetch'/);
   const v=HTML.match(/Versão (\d+)/)[1];
   assert.match(sw,new RegExp(`drums-v${v}'`));
+  assert.match(sw,/cache:'no-cache'/);  // vai sempre ver se há versão nova
 });
 
 test('nomes de ficheiro: o número inicial não é o artista',()=>{

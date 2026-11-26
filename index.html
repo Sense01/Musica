@@ -453,7 +453,7 @@ function render(){
     <button class="btn alt" id="rc" style="justify-self:start">Voltar a procurar capas em falta</button><small id="cvs"></small>
     <label style="margin-top:14px">Registo de falhas de reprodução</label><small id="plog" style="white-space:pre-wrap">${esc(plogs.join('\n'))||'Sem falhas registadas.'}</small>
     ${manual.length?'<button class="btn alt" id="cl">Remover músicas avulsas</button>':''}
-    <button class="btn alt" id="cp" style="justify-self:start;margin-top:22px">Prompt de Download</button><small style="margin-top:18px">Versão 29 · botões revistos</small></div>`;
+    <button class="btn alt" id="cp" style="justify-self:start;margin-top:22px">Prompt de Download</button><small style="margin-top:18px">Versão 30 · atualiza logo</small></div>`;
     updCovStat();
     $('#cv').onchange=e=>{cfg.covers=e.target.checked;st.set('cfg',cfg);if(cfg.covers)loadCovers()};
     $('#rc').onclick=()=>{Object.keys(apics).forEach(k=>{if(!apics[k])delete apics[k]});saveApics();let n=0;Object.keys(covers).forEach(k=>{if(!covers[k]){delete covers[k];n++}});covErr.clear();saveCovers();toast(n?'A procurar '+n+' capas em falta…':'A procurar capas…');loadCovers()};
