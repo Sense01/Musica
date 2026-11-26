@@ -446,25 +446,20 @@ function render(){
     c.innerHTML=`<div class="form"><small>1. Cria uma chave de API (Google Cloud Console, com a Drive API ativa). Restringe-a ao site <b>sense01.github.io/*</b> e só à Drive API.<br>2. Coloca as músicas numa pasta e partilha-a como «Qualquer pessoa com a ligação».<br>3. Cola abaixo a chave e a ligação da pasta.</small>
     <label>Chave de API</label><input class="q" id="k" value="${esc(cfg.key)}" autocomplete="off" style="margin:0">
     <label>Ligação ou ID da pasta</label><input class="q" id="f" value="${esc(cfg.folder)}" autocomplete="off" style="margin:0">
-    <button class="btn" id="sv">Guardar e sincronizar</button>
+    <button class="btn" id="sv">Guardar e sincronizar</button><div id="msg">${esc(msg)}</div>
     <label style="margin-top:14px;display:flex;gap:8px;align-items:center;color:var(--tx)"><input type="checkbox" id="tg" ${cfg.tags!==false?'checked':''}> Ler capas, álbuns e duração dos ficheiros (usa dados)</label>
     <label style="margin-top:8px;display:flex;gap:8px;align-items:center;color:var(--tx)"><input type="checkbox" id="lo" ${cfg.online!==false?'checked':''}> Procurar letras online (envia artista e título ao lrclib.net)</label>
     <label style="margin-top:8px;display:flex;gap:8px;align-items:center;color:var(--tx)"><input type="checkbox" id="cv" ${cfg.covers!==false?'checked':''}> Procurar capas online quando o ficheiro não tem (envia artista e título ao Deezer, iTunes e MusicBrainz)</label>
     <button class="btn alt" id="rc" style="justify-self:start">Voltar a procurar capas em falta</button><small id="cvs"></small>
     <label style="margin-top:14px">Registo de falhas de reprodução</label><small id="plog" style="white-space:pre-wrap">${esc(plogs.join('\n'))||'Sem falhas registadas.'}</small>
-    <label style="margin-top:22px">Ou adiciona uma música avulsa (ligação do ficheiro)</label>
-    <input class="q" id="ml" placeholder="https://drive.google.com/file/d/…" style="margin:0"><input class="q" id="mname" placeholder="Artista - Título" style="margin:0">
-    <button class="btn alt" id="ad">Adicionar música</button><div id="msg">${esc(msg)}</div>
     ${manual.length?'<button class="btn alt" id="cl">Remover músicas avulsas</button>':''}
-    <button class="btn alt" id="cp" style="justify-self:start;margin-top:22px">Prompt de Download</button><small style="margin-top:18px">Versão 28 · botões revistos</small></div>`;
+    <button class="btn alt" id="cp" style="justify-self:start;margin-top:22px">Prompt de Download</button><small style="margin-top:18px">Versão 29 · botões revistos</small></div>`;
     updCovStat();
     $('#cv').onchange=e=>{cfg.covers=e.target.checked;st.set('cfg',cfg);if(cfg.covers)loadCovers()};
     $('#rc').onclick=()=>{Object.keys(apics).forEach(k=>{if(!apics[k])delete apics[k]});saveApics();let n=0;Object.keys(covers).forEach(k=>{if(!covers[k]){delete covers[k];n++}});covErr.clear();saveCovers();toast(n?'A procurar '+n+' capas em falta…':'A procurar capas…');loadCovers()};
     $('#lo').onchange=e=>{cfg.online=e.target.checked;st.set('cfg',cfg)};
     $('#tg').onchange=e=>{cfg.tags=e.target.checked;st.set('cfg',cfg);if(cfg.tags)loadTags()};
     $('#sv').onclick=()=>{cfg={...cfg,key:$('#k').value.trim(),folder:fid($('#f').value)};st.set('cfg',cfg);sync()};
-    $('#ad').onclick=()=>{const id=fid($('#ml').value);if(id.length<15){msg='Ligação inválida.';return render()}
-      manual.push(parse({id,name:$('#mname').value.trim()||'Música '+(manual.length+1)}));st.set('manual',manual);build();msg='Música adicionada.';render()};
     if($('#cl'))$('#cl').onclick=()=>{manual=[];st.set('manual',manual);build();msg='';render()};
     $('#cp').onclick=()=>copyText(YT_PROMPT).then(ok=>toast(ok?'Prompt copiado':'Não foi possível copiar'))}
 }
