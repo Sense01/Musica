@@ -123,8 +123,6 @@ h1{font-size:28px}
 #sheet{touch-action:none;overscroll-behavior:contain}
 @media(max-width:860px){#sheet{display:flex}}
 @media(prefers-reduced-motion:reduce){#sheet{transition:none}}
-.grab{width:100%;height:48px;flex:none;display:flex;align-items:center;justify-content:center;margin:-6px 0 10px}
-.grab::before{content:"";width:44px;height:5px;border-radius:3px;background:var(--tx2);opacity:.6}
 .sclose{position:absolute;top:calc(env(safe-area-inset-top,0px) + 8px);right:12px;width:44px;height:44px;border-radius:50%;background:var(--bg2);display:flex;align-items:center;justify-content:center;font-size:24px;z-index:2}
 .sclose svg{fill:none;stroke:currentColor;stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round}
 #sheet .art{width:min(100%,360px);aspect-ratio:1;border-radius:12px;box-shadow:0 18px 40px rgba(0,0,0,.35);font-size:90px;margin:auto 0 22px;flex:none}
@@ -270,7 +268,6 @@ h1{font-size:28px}
 </nav>
 
 <section id="sheet">
-  <button class="grab" id="close" aria-label="Minimizar leitor"></button>
   <button class="sclose" id="close2" aria-label="Minimizar leitor"><svg viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg></button>
   <div class="art" id="sArt"><svg><use href="#i-note"/></svg></div>
   <div class="info"><b id="sT">Sem música</b><span id="sA"></span></div>
@@ -453,26 +450,14 @@ function render(){
     <label style="margin-top:14px;display:flex;gap:8px;align-items:center;color:var(--tx)"><input type="checkbox" id="tg" ${cfg.tags!==false?'checked':''}> Ler capas, álbuns e duração dos ficheiros (usa dados)</label>
     <label style="margin-top:8px;display:flex;gap:8px;align-items:center;color:var(--tx)"><input type="checkbox" id="lo" ${cfg.online!==false?'checked':''}> Procurar letras online (envia artista e título ao lrclib.net)</label>
     <label style="margin-top:8px;display:flex;gap:8px;align-items:center;color:var(--tx)"><input type="checkbox" id="cv" ${cfg.covers!==false?'checked':''}> Procurar capas online quando o ficheiro não tem (envia artista e título ao Deezer, iTunes e MusicBrainz)</label>
-    <button class="btn alt" id="rc" style="justify-self:start">Voltar a procurar capas em falta</button><small id="cvs"></small><button class="btn alt" id="ct" style="justify-self:start">Testar pesquisa de capas</button><small id="ctr" style="white-space:pre-wrap"></small>
+    <button class="btn alt" id="rc" style="justify-self:start">Voltar a procurar capas em falta</button><small id="cvs"></small>
     <label style="margin-top:14px">Registo de falhas de reprodução</label><small id="plog" style="white-space:pre-wrap">${esc(plogs.join('\n'))||'Sem falhas registadas.'}</small>
     <label style="margin-top:22px">Ou adiciona uma música avulsa (ligação do ficheiro)</label>
     <input class="q" id="ml" placeholder="https://drive.google.com/file/d/…" style="margin:0"><input class="q" id="mname" placeholder="Artista - Título" style="margin:0">
     <button class="btn alt" id="ad">Adicionar música</button><div id="msg">${esc(msg)}</div>
     ${manual.length?'<button class="btn alt" id="cl">Remover músicas avulsas</button>':''}
-    <button class="btn alt" id="cp" style="justify-self:start;margin-top:22px">Prompt de Download</button><small style="margin-top:18px">Versão 27 · prompt de downloads</small></div>`;
+    <button class="btn alt" id="cp" style="justify-self:start;margin-top:22px">Prompt de Download</button><small style="margin-top:18px">Versão 28 · botões revistos</small></div>`;
     updCovStat();
-    $('#ct').onclick=async()=>{const o=$('#ctr'),L=[];o.textContent='A testar…';
-      const x=cur||songs[0];if(!x){o.textContent='Sem músicas na biblioteca.';return}
-      const ar=mainArtist(x),ti=clean(x.title),term=(ar+' '+ti).trim();
-      L.push('Música: '+x.title+' — '+x.artist+(x.album?' · álbum: '+x.album:''),'Pesquisa: «'+term+'»','Estado guardado: '+(covers[ck(x)]===undefined?'ainda não procurada':covers[ck(x)]===''?'sem resultado':'tem capa'));
-      let got=null;
-      for(const [name,fn] of SOURCES){const t0=Date.now();let r=null,err='';try{r=await fn(term,'song',ar,ti)}catch(e){err=String(e)}
-        const m=r?pickArt(r,x,false,true):[];
-        L.push(name+': '+(r==null?'sem ligação'+(err?' ('+err+')':''):r.length+' resultados · '+m.length+' coincidem')+' · '+(Date.now()-t0)+' ms');
-        if(!got&&m[0]&&(!m[0].chk||await imgOk(m[0].img)))got=m[0].img}
-      if(got){L.push('Capa encontrada ✓');const k=ck(x);if(!cov(x)){covers[k]=got;covUrl[k]=got;covErr.delete(k);saveCovers();paint(k)}}else L.push('Nenhuma capa coincide com esta música.');
-      L.push('Leitura de etiquetas: '+(cfg.tags===false?'desligada':Object.keys(meta).length+' lidas · '+tagging.size+' em curso'),'Pesquisa automática: '+(cfg.covers===false?'desligada':covRun?'a correr':'parada'));
-      o.textContent=L.join('\n');updCovStat();loadCovers()};
     $('#cv').onchange=e=>{cfg.covers=e.target.checked;st.set('cfg',cfg);if(cfg.covers)loadCovers()};
     $('#rc').onclick=()=>{Object.keys(apics).forEach(k=>{if(!apics[k])delete apics[k]});saveApics();let n=0;Object.keys(covers).forEach(k=>{if(!covers[k]){delete covers[k];n++}});covErr.clear();saveCovers();toast(n?'A procurar '+n+' capas em falta…':'A procurar capas…');loadCovers()};
     $('#lo').onchange=e=>{cfg.online=e.target.checked;st.set('cfg',cfg)};
@@ -862,7 +847,7 @@ document.addEventListener('click',e=>{
   const r=e.target.closest('[data-i]');if(r){playRow(+r.dataset.i);return}
   if(e.target.closest('#mini'))$('#sheet').classList.add('open')});
 const sh=$('#sheet'),shut=()=>{sh.classList.remove('open');sh.style.transform='';sh.style.transition=''};
-$('#close').onclick=shut;$('#close2').onclick=shut;
+$('#close2').onclick=shut;
 let ty=null,t0=0,dragging=false;
 const reset=()=>{sh.style.transition='';sh.style.transform='';ty=null;dragging=false};
 sh.addEventListener('touchstart',e=>{if(e.target.closest('input')||e.touches.length>1){ty=null;return}ty=e.touches[0].clientY;t0=Date.now();dragging=false},{passive:true});
